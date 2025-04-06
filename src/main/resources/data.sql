@@ -1,0 +1,84 @@
+-- -- =======================================
+-- -- PERMISOS (basado en enum Permiso.java)
+-- -- =======================================
+-- INSERT INTO PERMISSIONS (id, name) VALUES
+--                                        (1, 'CREAR_USUARIO'),
+--                                        (2, 'ELIMINAR_USUARIO'),
+--                                        (3, 'APROBAR_PROVEEDOR'),
+--                                        (4, 'ACTIVAR_CUENTA'),
+--                                        (5, 'VER_ESPACIOS'),
+--                                        (6, 'MODIFICAR_ESPACIO'),
+--                                        (7, 'VER_TRANSACCIONES'),
+--                                        (8, 'CANCELAR_RESERVA'),
+--                                        (9, 'GESTIONAR_REEMBOLSOS'),
+--                                        (10, 'VER_INFORMES'),
+--                                        (11, 'CONFIGURAR_SISTEMA'),
+--                                        (12, 'CREAR_ESPACIO'),
+--                                        (13, 'ESTABLECER_PRECIO'),
+--                                        (14, 'GESTIONAR_CONTRATO'),
+--                                        (15, 'VER_PAGOS_RECIBIDOS'),
+--                                        (16, 'EMITIR_FACTURAS'),
+--                                        (17, 'VER_INFORMES_PROPIO'),
+--                                        (18, 'BUSCAR_ESPACIOS'),
+--                                        (19, 'VER_DETALLES_ESPACIO'),
+--                                        (20, 'CREAR_RESERVA'),
+--                                        (21, 'CANCELAR_RESERVA_CLIENTE'),
+--                                        (22, 'CALIFICAR_ESPACIO'),
+--                                        (23, 'REALIZAR_PAGO'),
+--                                        (24, 'VER_HISTORIAL_PAGOS'),
+--                                        (25, 'DESCARGAR_FACTURA');
+
+-- ========================
+-- ROLES
+-- -- ========================
+-- INSERT INTO ROLES (id, name) VALUES
+--                                  (1, 'ADMIN'),
+--                                  (2, 'PROVEEDOR'),
+--                                  (3, 'CLIENTE');
+
+-- ========================
+-- ROL ↔ PERMISOS
+-- ========================
+
+-- -- ADMIN
+-- INSERT INTO roles_permissions (role_id, permission_id) VALUES
+--                                                            (1, 1),  -- CREAR_USUARIO
+--                                                            (1, 2),  -- ELIMINAR_USUARIO
+--                                                            (1, 3),  -- APROBAR_PROVEEDOR
+--                                                            (1, 4),  -- ACTIVAR_CUENTA
+--                                                            (1, 5),  -- VER_ESPACIOS
+--                                                            (1, 6),  -- MODIFICAR_ESPACIO
+--                                                            (1, 7),  -- VER_TRANSACCIONES
+--                                                            (1, 8),  -- CANCELAR_RESERVA
+--                                                            (1, 9),  -- GESTIONAR_REEMBOLSOS
+--                                                            (1, 10), -- VER_INFORMES
+--                                                            (1, 11); -- CONFIGURAR_SISTEMA
+--
+-- -- PROVEEDOR
+-- INSERT INTO roles_permissions (role_id, permission_id) VALUES
+--                                                            (2, 12), -- CREAR_ESPACIO
+--                                                            (2, 6),  -- MODIFICAR_ESPACIO
+--                                                            (2, 13), -- ESTABLECER_PRECIO
+--                                                            (2, 14), -- GESTIONAR_CONTRATO
+--                                                            (2, 15), -- VER_PAGOS_RECIBIDOS
+--                                                            (2, 16), -- EMITIR_FACTURAS
+--                                                            (2, 17); -- VER_INFORMES_PROPIO
+--
+-- -- CLIENTE
+-- INSERT INTO roles_permissions (role_id, permission_id) VALUES
+--                                                            (3, 18), -- BUSCAR_ESPACIOS
+--                                                            (3, 19), -- VER_DETALLES_ESPACIO
+--                                                            (3, 20), -- CREAR_RESERVA
+--                                                            (3, 21), -- CANCELAR_RESERVA_CLIENTE
+--                                                            (3, 22), -- CALIFICAR_ESPACIO
+--                                                            (3, 23), -- REALIZAR_PAGO
+--                                                            (3, 24), -- VER_HISTORIAL_PAGOS
+--                                                            (3, 25); -- DESCARGAR_FACTURA
+
+-- ========================
+-- USUARIOS DE EJEMPLO
+-- ========================
+-- INSERT INTO USERS (id, email, password, enabled, role_id) VALUES
+--                                                               (1, 'admin@demo.com', 'admin123', true, 1),
+--                                                               (2, 'proveedor@demo.com', 'prov123', true, 2),
+--                                                               (3, 'cliente@demo.com', 'cliente123', true, 3);
