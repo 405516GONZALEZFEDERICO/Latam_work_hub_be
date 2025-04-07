@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 public interface AuthService {
     String syncUser(HttpServletRequest request);
     UserDto obtenerPerfil(HttpServletRequest request);
-    String registrarUsuario(String email, String password);
+    String registrarUsuario(String email, String password,String role);
     AuthResponseDto login(String email, String password);
     String logout(String refreshToken);
     String recuperarContrasenia(String email);

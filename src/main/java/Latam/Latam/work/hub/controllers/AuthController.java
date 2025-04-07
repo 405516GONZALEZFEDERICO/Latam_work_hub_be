@@ -66,8 +66,12 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(@RequestParam String email, @RequestParam String password) {
-        return ResponseEntity.ok(authService.registrarUsuario(email, password));
+    public ResponseEntity<String> register(
+            @RequestParam String email,
+            @RequestParam String password,
+            @RequestParam(required = false) String role
+    ) {
+        return ResponseEntity.ok(authService.registrarUsuario(email, password, role));
     }
 
     @PostMapping("/login")
@@ -87,13 +91,13 @@ public class AuthController {
 
 
     @PostMapping("/refresh-token")
-    public ResponseEntity<TokenDto> refreshToken(HttpServletRequest request) {
-        TokenDto tokenDto = tokenValidationService.refrescarToken(request, null);
+    public ResponseEntity<TokenDto> refreshToken(@RequestParam String refreshToken) {
+        TokenDto tokenDto = tokenValidationService.refrescarToken(refreshToken);
         return ResponseEntity.ok(tokenDto);
     }
 
     @GetMapping("/recuperar-contrasenia")
-    public ResponseEntity<String> recoverPassword(@RequestParam String email) {
+    public ResponseEntity<String> recuperarContrasenia(@RequestParam String email) {
         return ResponseEntity.ok(authService.recuperarContrasenia(email));
     }
 

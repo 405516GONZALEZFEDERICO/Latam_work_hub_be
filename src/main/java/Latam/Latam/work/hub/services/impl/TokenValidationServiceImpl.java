@@ -2,43 +2,46 @@ package Latam.Latam.work.hub.services.impl;
 
 
 import Latam.Latam.work.hub.dtos.TokenDto;
+import Latam.Latam.work.hub.exceptions.AuthException;
 import Latam.Latam.work.hub.services.TokenValidationService;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class TokenValidationServiceImpl implements TokenValidationService {
-    @Value("${firebase.api.key}")
-    private String firebaseApiKey;
+
+    private String firebaseApiKey= "AIzaSyB9b7mzFtoRDNB0YroNRe6tF9uQFGfvzXQ";
+
     @Override
-    public TokenDto refrescarToken(HttpServletRequest request, HttpServletResponse response) {
-        String refreshToken = request.getHeader("refreshToken");
+    public TokenDto refrescarToken(String refreshToken) {
         if (refreshToken == null || refreshToken.isEmpty()) {
-            throw new RuntimeException("Refresh token no proporcionado");
+            throw new AuthException("Refresh token no proporcionado");
         }
 
         RestTemplate restTemplate = new RestTemplate();
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
-        MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-        body.add("grant_type", "refresh_token");
-        body.add("refresh_token", refreshToken);
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("grant_type", "refresh_token");
+        requestBody.put("refresh_token", refreshToken);
 
-        HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(body, headers);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
         try {
             ResponseEntity<Map> responseEntity = restTemplate.postForEntity(
@@ -51,23 +54,64 @@ public class TokenValidationServiceImpl implements TokenValidationService {
 
             String idToken = (String) responseBody.get("id_token");
             String newRefreshToken = (String) responseBody.get("refresh_token");
+            String expiresIn = String.valueOf(responseBody.get("expires_in"));
 
             return TokenDto.builder()
                     .token(idToken)
                     .refreshToken(newRefreshToken)
+                    .expiresIn(expiresIn)
                     .build();
-
+        } catch (HttpClientErrorException e) {
+            log.error("Error al refrescar token: {}", e.getResponseBodyAsString());
+            throw new AuthException("Error al refrescar token: " + e.getResponseBodyAsString());
         } catch (Exception e) {
-            throw new RuntimeException("Error al refrescar token con Firebase", e);
+            log.error("Error interno al refrescar token: {}", e.getMessage());
+            throw new AuthException("Error interno al refrescar token", e);
         }
     }
+
     @Override
     public boolean esTokenValido(String idToken) {
         try {
             FirebaseAuth.getInstance().verifyIdToken(idToken);
             return true;
         } catch (FirebaseAuthException e) {
+            log.debug("Token inválido: {}", e.getMessage());
             return false;
+        }
+    }
+
+    @Override
+    public TokenDto exchangeCustomTokenForIdToken(String customToken) {
+        RestTemplate restTemplate = new RestTemplate();
+        String firebaseAuthUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=" + firebaseApiKey;
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("token", customToken);
+        requestBody.put("returnSecureToken", true);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+
+        try {
+            ResponseEntity<Map> responseEntity = restTemplate.exchange(
+                    firebaseAuthUrl,
+                    HttpMethod.POST,
+                    requestEntity,
+                    Map.class
+            );
+
+            Map<String, Object> responseBody = responseEntity.getBody();
+
+            return TokenDto.builder()
+                    .token((String) responseBody.get("idToken"))
+                    .refreshToken((String) responseBody.get("refreshToken"))
+                    .expiresIn((String) responseBody.get("expiresIn"))
+                    .build();
+        } catch (Exception e) {
+            log.error("Error al intercambiar token: {}", e.getMessage());
+            throw new AuthException("Error al procesar token", e);
         }
     }
 }
