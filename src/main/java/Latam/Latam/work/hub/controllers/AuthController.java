@@ -1,6 +1,5 @@
 package Latam.Latam.work.hub.controllers;
 
-
 import Latam.Latam.work.hub.dtos.AuthResponseDto;
 import Latam.Latam.work.hub.dtos.AuthResponseGoogleDto;
 import Latam.Latam.work.hub.dtos.FirebaseUserInfoDto;
@@ -15,8 +14,13 @@ import com.google.firebase.auth.FirebaseAuthException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RequiredArgsConstructor
 @RestController
@@ -60,18 +64,15 @@ public class AuthController {
         }
     }
 
-    @PostMapping("/sync")
-    public ResponseEntity<String> syncUser(HttpServletRequest request) {
-        return ResponseEntity.ok(authService.syncUser(request));
-    }
+
 
     @PostMapping("/register")
-    public ResponseEntity<String> register(
-            @RequestParam String email,
-            @RequestParam String password,
-            @RequestParam(required = false) String role
-    ) {
-        return ResponseEntity.ok(authService.registrarUsuario(email, password, role));
+    public ResponseEntity<String> register(@RequestParam String email, @RequestParam String password) {
+        String result = authService.registrarUsuario(email, password);
+        return ResponseEntity
+                .ok()
+                .contentType(MediaType.TEXT_PLAIN) // Explicitly set content type to text/plain
+                .body(result);
     }
 
     @PostMapping("/login")
@@ -104,7 +105,7 @@ public class AuthController {
     @GetMapping("/verificar-rol")
     public ResponseEntity<FirebaseUserInfoDto> verificarRol(@RequestParam String idToken) {
         try {
-            FirebaseUserInfoDto response = firebaseRoleService.verificarRolYPermisos(idToken);
+            FirebaseUserInfoDto response = firebaseRoleService.verificarRol(idToken);
             return ResponseEntity.ok(response);
         } catch (FirebaseAuthException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -120,6 +121,7 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new TokenValidationDto(false, "Token inválido o expirado."));
         }
     }
+
 
 
 }

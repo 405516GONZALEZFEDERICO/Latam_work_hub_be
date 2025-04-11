@@ -1,8 +1,10 @@
 package Latam.Latam.work.hub.services.impl;
 
 
+import Latam.Latam.work.hub.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.dtos.TokenDto;
 import Latam.Latam.work.hub.exceptions.AuthException;
+import Latam.Latam.work.hub.services.FirebaseRoleService;
 import Latam.Latam.work.hub.services.TokenValidationService;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -24,8 +26,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Slf4j
 public class TokenValidationServiceImpl implements TokenValidationService {
+    private final FirebaseRoleService firebaseRoleService;
 
-    private String firebaseApiKey= "AIzaSyB9b7mzFtoRDNB0YroNRe6tF9uQFGfvzXQ";
+    private String firebaseApiKey = "AIzaSyB9b7mzFtoRDNB0YroNRe6tF9uQFGfvzXQ";
 
     @Override
     public TokenDto refrescarToken(String refreshToken) {
@@ -56,11 +59,24 @@ public class TokenValidationServiceImpl implements TokenValidationService {
             String newRefreshToken = (String) responseBody.get("refresh_token");
             String expiresIn = String.valueOf(responseBody.get("expires_in"));
 
-            return TokenDto.builder()
+            FirebaseUserInfoDto userInfo = null;
+            try {
+                userInfo = firebaseRoleService.verificarRol(idToken);
+            } catch (FirebaseAuthException e) {
+                log.warn("No se pudo verificar el rol del usuario al refrescar token: {}", e.getMessage());
+            }
+
+            TokenDto tokenDto = TokenDto.builder()
                     .token(idToken)
                     .refreshToken(newRefreshToken)
                     .expiresIn(expiresIn)
                     .build();
+
+            if (userInfo != null) {
+                tokenDto.setRole(userInfo.getRole());
+            }
+
+            return tokenDto;
         } catch (HttpClientErrorException e) {
             log.error("Error al refrescar token: {}", e.getResponseBodyAsString());
             throw new AuthException("Error al refrescar token: " + e.getResponseBodyAsString());
@@ -103,12 +119,22 @@ public class TokenValidationServiceImpl implements TokenValidationService {
             );
 
             Map<String, Object> responseBody = responseEntity.getBody();
+            String idToken = (String) responseBody.get("idToken");
 
-            return TokenDto.builder()
-                    .token((String) responseBody.get("idToken"))
+            TokenDto tokenDto = TokenDto.builder()
+                    .token(idToken)
                     .refreshToken((String) responseBody.get("refreshToken"))
                     .expiresIn((String) responseBody.get("expiresIn"))
                     .build();
+
+            try {
+                FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRol(idToken);
+                tokenDto.setRole(userInfo.getRole());
+            } catch (FirebaseAuthException e) {
+                log.warn("No se pudo verificar el rol del usuario al intercambiar token: {}", e.getMessage());
+            }
+
+            return tokenDto;
         } catch (Exception e) {
             log.error("Error al intercambiar token: {}", e.getMessage());
             throw new AuthException("Error al procesar token", e);

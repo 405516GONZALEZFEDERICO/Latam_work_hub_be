@@ -1,6 +1,5 @@
 package Latam.Latam.work.hub.entities;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -10,17 +9,17 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-@Table(name = "ROLES")
+
+@Entity
+@Table(name = "TIPOS_ESPACIO")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Entity
-public class RoleEntity {
+public class SpaceTypeEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(unique = true)
-    private String name; // "ROLE_ADMIN", "ROLE_CLIENT", "ROLE_PROVIDER"
+    private String name;       
+    private String description;
 }

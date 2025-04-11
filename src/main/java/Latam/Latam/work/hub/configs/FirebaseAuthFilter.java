@@ -48,13 +48,11 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
-        // Skip filter for open paths
         if (isOpenPath(path)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Get the token from the Authorization header
         String token = getTokenFromRequest(request);
 
         if (token == null) {
@@ -63,21 +61,16 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
         }
 
         try {
-            // Verify the token and extract user information
-            FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRolYPermisos(token);
+            FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRol(token);
 
-            // Set attributes in request for downstream use
             request.setAttribute("firebaseEmail", userInfo.getEmail());
             request.setAttribute("firebaseUid", userInfo.getUid());
             request.setAttribute("firebaseRole", userInfo.getRole());
 
-            // Set up Spring Security context
             List<SimpleGrantedAuthority> authorities = new ArrayList<>();
 
-            // Add role as an authority
             authorities.add(new SimpleGrantedAuthority("ROLE_" + userInfo.getRole()));
 
-            // Add each permission as an authority
             if (userInfo.getPermissions() != null) {
                 for (String permission : userInfo.getPermissions()) {
                     authorities.add(new SimpleGrantedAuthority(permission));
@@ -89,7 +82,6 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            // Continue with the filter chain
             filterChain.doFilter(request, response);
         } catch (FirebaseAuthException e) {
             log.error("Error de autenticación Firebase: {}", e.getMessage());

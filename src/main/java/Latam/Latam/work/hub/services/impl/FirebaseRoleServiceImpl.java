@@ -1,37 +1,38 @@
 package Latam.Latam.work.hub.services.impl;
 
 import Latam.Latam.work.hub.dtos.FirebaseUserInfoDto;
-import Latam.Latam.work.hub.entities.PermissionEntity;
 import Latam.Latam.work.hub.entities.RoleEntity;
+import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.exceptions.AuthException;
+import Latam.Latam.work.hub.repositories.RoleRepository;
+import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
-import Latam.Latam.work.hub.services.RolePermissionService;
-import com.google.firebase.auth.ExportedUserRecord;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
-import com.google.firebase.auth.ListUsersPage;
 import com.google.firebase.auth.UserRecord;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class FirebaseRoleServiceImpl implements FirebaseRoleService {
+    private final RoleRepository roleRepository;
+    private final UserRepository userRepository;
 
-    private final RolePermissionService rolePermissionService;
+    private static final String DEFAULT_ROLE = "DEFAULT";
+    private static final String[] VALID_ROLES = {"ADMIN", "DEFAULT", "CLIENT", "PROVIDER"};
 
-    private String firebaseApiKey = "AIzaSyB9b7mzFtoRDNB0YroNRe6tF9uQFGfvzXQ";
-
-    /**
-     * Obtiene el rol de un usuario en Firebase
-     */
+ 
+    @Override
     public String obtenerRolDeUsuario(String uid) throws FirebaseAuthException {
         try {
             UserRecord userRecord = FirebaseAuth.getInstance().getUser(uid);
@@ -39,45 +40,47 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
 
             return claims != null && claims.containsKey("role")
                     ? claims.get("role").toString()
-                    : "sin_rol";
+                    : DEFAULT_ROLE;
         } catch (FirebaseAuthException e) {
             log.error("Error al obtener rol de usuario {}: {}", uid, e.getMessage());
             throw e;
         }
     }
 
-    /**
-     * Asigna un rol y sus permisos a un usuario en Firebase
-     */
-    @Transactional
-    public void asignarRolYPermisosAFirebaseUser(String uid, String rolNombre) throws FirebaseAuthException {
-        try {
-            RoleEntity rolEntity = rolePermissionService.getRoleByName(rolNombre);
-            if (rolEntity == null) {
-                throw new AuthException("Rol no válido: " + rolNombre);
-            }
 
-            List<PermissionEntity> permisos = rolePermissionService.getPermissionsForRole(rolNombre);
+
+
+  
+    @Override
+    @Transactional
+    public void asignarRolAFirebaseUser(String uid, String rolNombre) throws FirebaseAuthException {
+        try {
+            RoleEntity rolEntity = roleRepository.findByName(rolNombre)
+                    .orElseThrow(() -> new AuthException("Rol no válido: " + rolNombre));
 
             Map<String, Object> claims = new HashMap<>();
             claims.put("role", rolEntity.getName());
-            claims.put("permissions", permisos.stream()
-                    .map(PermissionEntity::getName)
-                    .collect(Collectors.toList()));
             claims.put("updated_at", System.currentTimeMillis());
 
             FirebaseAuth.getInstance().setCustomUserClaims(uid, claims);
-            log.info("Rol {} y {} permisos asignados al usuario {}", rolEntity.getName(), permisos.size(), uid);
+
+            UserEntity user = userRepository.findByFirebaseUid(uid)
+                    .orElseThrow(() -> new AuthException("Usuario no encontrado con UID: " + uid));
+
+            user.setRole(rolEntity); 
+            user.setLastAccess(LocalDateTime.now());
+            userRepository.save(user);
+            log.info("Rol {} asignado al usuario {}", rolEntity.getName(), uid);
         } catch (FirebaseAuthException e) {
             log.error("Error al asignar rol a usuario {}: {}", uid, e.getMessage());
             throw e;
         }
     }
 
-    /**
-     * Verifica el token y obtiene información del usuario incluyendo su rol y permisos
-     */
-    public FirebaseUserInfoDto verificarRolYPermisos(String idToken) throws FirebaseAuthException {
+
+    
+    @Override
+    public FirebaseUserInfoDto verificarRol(String idToken) throws FirebaseAuthException {
         try {
             FirebaseToken token = FirebaseAuth.getInstance().verifyIdToken(idToken);
             String uid = token.getUid();
@@ -88,18 +91,22 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
             String email = token.getEmail();
             String role = claims != null && claims.containsKey("role")
                     ? claims.get("role").toString()
-                    : "sin_rol";
+                    : DEFAULT_ROLE;
 
-            @SuppressWarnings("unchecked")
-            List<String> permissions = claims != null && claims.containsKey("permissions")
-                    ? (List<String>) claims.get("permissions")
-                    : new ArrayList<>();
+            UserEntity userEntity = userRepository.findByFirebaseUid(uid).orElse(null);
+
+            if (userEntity == null) {
+                createNewUserWithDefaultRole(uid, email, token.getName(), token.getPicture());
+                role = DEFAULT_ROLE;
+            } else {
+                userEntity.setLastAccess(LocalDateTime.now());
+                userRepository.save(userEntity);
+            }
 
             return FirebaseUserInfoDto.builder()
                     .email(email)
                     .uid(uid)
                     .role(role)
-                    .permissions(permissions)
                     .build();
         } catch (FirebaseAuthException e) {
             log.error("Error al verificar token: {}", e.getMessage());
@@ -107,43 +114,82 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
         }
     }
 
-    @Override
-    @Transactional
-    public void actualizarPermisosDeUsuariosPorRol(RoleEntity role) {
-        if (role == null) {
-            throw new AuthException("El rol no puede ser nulo");
-        }
 
-        actualizarPermisosDeUsuariosPorRol(role.getName());
+    @Transactional
+    @Override
+    public void createNewUserWithDefaultRole(String uid, String email, String name, String photoUrl) {
+        try {
+            RoleEntity defaultRole = roleRepository.findByName(DEFAULT_ROLE)
+                    .orElseThrow(() -> new AuthException("Rol DEFAULT no encontrado"));
+
+            UserEntity newUser = new UserEntity();
+            newUser.setEmail(email);
+            newUser.setFirebaseUid(uid);
+            newUser.setName(name);
+            newUser.setPhotoUrl(photoUrl);
+            newUser.setEnabled(true);
+            newUser.setRegistrationDate(LocalDateTime.now());
+            newUser.setLastAccess(LocalDateTime.now());
+            newUser.setRole(defaultRole);
+
+            userRepository.save(newUser);
+
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("role", DEFAULT_ROLE);
+            claims.put("updated_at", System.currentTimeMillis());
+
+            FirebaseAuth.getInstance().setCustomUserClaims(uid, claims);
+
+            log.info("Nuevo usuario creado con UID: {} y rol DEFAULT", uid);
+        } catch (Exception e) {
+            log.error("Error al crear usuario: {}", e.getMessage());
+            throw new AuthException("Error al crear usuario", e);
+        }
     }
 
-    /**
-     * Actualiza los permisos de todos los usuarios con un rol específico
-     */
+    @Override
     @Transactional
-    public void actualizarPermisosDeUsuariosPorRol(String roleName) {
+    public void sincronizarRolesConFirebase() {
         try {
-            log.info("Iniciando actualización de permisos para usuarios con rol {}", roleName);
-            ListUsersPage page = FirebaseAuth.getInstance().listUsers(null);
-            int usuariosActualizados = 0;
+            log.info("Iniciando sincronización de roles con Firebase");
+            List<UserEntity> users = userRepository.findAll();
 
-            while (page != null) {
-                for (ExportedUserRecord user : page.getValues()) {
-                    Map<String, Object> claims = user.getCustomClaims();
-                    if (claims != null && claims.containsKey("role") &&
-                            roleName.equals(claims.get("role").toString())) {
-                        asignarRolYPermisosAFirebaseUser(user.getUid(), roleName);
-                        usuariosActualizados++;
-                    }
+            for (UserEntity user : users) {
+                if (user.getFirebaseUid() != null && user.getRole()!=null) {
+                    RoleEntity primaryRole = user.getRole();
+
+                    Map<String, Object> claims = new HashMap<>();
+                    claims.put("role", primaryRole.getName());
+                    claims.put("updated_at", System.currentTimeMillis());
+
+                    FirebaseAuth.getInstance().setCustomUserClaims(user.getFirebaseUid(), claims);
                 }
-
-                page = page.getNextPage();
             }
 
-            log.info("Actualizados permisos de {} usuarios con rol {}", usuariosActualizados, roleName);
-        } catch (FirebaseAuthException e) {
-            log.error("Error al actualizar permisos de usuarios por rol {}: {}", roleName, e.getMessage());
-            throw new AuthException("Error al actualizar permisos: " + e.getMessage(), e);
+            log.info("Sincronización de roles completada para {} usuarios", users.size());
+        } catch (Exception e) {
+            log.error("Error al sincronizar roles con Firebase: {}", e.getMessage());
+            throw new AuthException("Error al sincronizar roles", e);
         }
+    }
+
+
+    @Override
+    @Transactional
+    public void cambiarRolDeUsuario(String uid, String nuevoRol) throws FirebaseAuthException {
+        if (!isValidRole(nuevoRol)) {
+            throw new AuthException("Rol no válido: " + nuevoRol);
+        }
+
+        asignarRolAFirebaseUser(uid, nuevoRol);
+    }
+
+    private boolean isValidRole(String role) {
+        for (String validRole : VALID_ROLES) {
+            if (validRole.equals(role)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

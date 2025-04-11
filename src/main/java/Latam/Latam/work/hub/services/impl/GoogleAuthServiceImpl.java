@@ -3,8 +3,9 @@ package Latam.Latam.work.hub.services.impl;
 
 import Latam.Latam.work.hub.dtos.AuthResponseGoogleDto;
 import Latam.Latam.work.hub.dtos.FirebaseUserInfoDto;
-import Latam.Latam.work.hub.dtos.TokenDto;
 import Latam.Latam.work.hub.entities.UserEntity;
+import Latam.Latam.work.hub.exceptions.AuthException;
+import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
 import Latam.Latam.work.hub.services.GoogleAuthService;
 import Latam.Latam.work.hub.services.TokenValidationService;
@@ -15,7 +16,17 @@ import com.google.firebase.auth.FirebaseToken;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,64 +34,104 @@ import org.springframework.stereotype.Service;
 public class GoogleAuthServiceImpl implements GoogleAuthService {
 
     private final UserService userService;
+    private final UserRepository userRepository;
     private final FirebaseRoleService firebaseRoleService;
     private final TokenValidationService tokenValidationService;
+    private String firebaseApiKey = "AIzaSyB9b7mzFtoRDNB0YroNRe6tF9uQFGfvzXQ";
 
-    /**
-     * Inicia sesión con Google
-     */
     @Transactional
     public AuthResponseGoogleDto loginWithGoogle(String idToken) {
         try {
-            // Verificar token de Google
             FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(idToken);
             String uid = decodedToken.getUid();
             String email = decodedToken.getEmail();
             String name = decodedToken.getName();
+            String photoUrl = decodedToken.getPicture();
 
-            // Crear o actualizar usuario local
-            UserEntity user = userService.createOrUpdateLocalUser(email, uid, name);
+            UserEntity user = userService.createOrUpdateLocalUser(email, uid, name, photoUrl);
 
-            // Verificar si tiene rol asignado, si no, asignarle CLIENTE
-            String rol = firebaseRoleService.obtenerRolDeUsuario(uid);
-            if ("sin_rol".equals(rol)) {
-                firebaseRoleService.asignarRolYPermisosAFirebaseUser(uid, "CLIENTE");
-                rol = "CLIENTE";
-            }
+            FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRol(idToken);
 
-            // Generar token personalizado y obtener info
-            String customToken = FirebaseAuth.getInstance().createCustomToken(uid);
-            TokenDto tokenInfo = tokenValidationService.exchangeCustomTokenForIdToken(customToken);
-
-            // Obtener permisos actualizados
-            FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRolYPermisos(tokenInfo.getToken());
-
-            // Construir respuesta
             return AuthResponseGoogleDto.builder()
-                    .idToken(tokenInfo.getToken())
-                    .refreshToken(tokenInfo.getRefreshToken())
-                    .expiresIn(tokenInfo.getExpiresIn())
+                    .idToken(idToken) 
                     .email(email)
                     .localId(uid)
                     .role(userInfo.getRole())
-                    .permissions(userInfo.getPermissions())
                     .name(name)
                     .build();
 
-// El resto del GoogleAuthService debería cerrarse así:
         } catch (FirebaseAuthException e) {
-            throw new RuntimeException(e);
+            throw new AuthException("Token de Google inválido o expirado", e);
         }
     }
 
 
     @Override
     public String registerWithGoogle(String idToken) {
-        return null;
+        try {
+            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(idToken);
+            String uid = decodedToken.getUid();
+            String email = decodedToken.getEmail();
+            String name = decodedToken.getName();
+            String picture = decodedToken.getPicture();
+
+            Optional<UserEntity> userOpt = userRepository.findByEmail(email);
+            if (userOpt.isPresent()) {
+                return "El usuario ya está registrado";
+            }
+
+            userService.createOrUpdateLocalUser(email, uid,picture,name);
+
+            firebaseRoleService.asignarRolAFirebaseUser(uid, "DEFAULT");
+            return "Usuario registrado con Google correctamente. UID: " + uid;
+
+        } catch (FirebaseAuthException e) {
+            throw new RuntimeException("Error al verificar token de Google: " + e.getMessage());
+        } catch (Exception e) {
+            throw new RuntimeException("Error en registro con Google: " + e.getMessage());
+        }
     }
 
     @Override
     public AuthResponseGoogleDto refreshGoogleToken(String refreshToken) {
-        return null;
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            String firebaseRefreshUrl = "https://securetoken.googleapis.com/v1/token?key=" + firebaseApiKey;
+
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("grant_type", "refresh_token");
+            requestBody.put("refresh_token", refreshToken);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<Map> responseEntity = restTemplate.exchange(
+                    firebaseRefreshUrl,
+                    HttpMethod.POST,
+                    requestEntity,
+                    Map.class
+            );
+
+            Map<String, Object> responseBody = responseEntity.getBody();
+
+            String newIdToken = (String) responseBody.get("id_token");
+            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(newIdToken);
+            String uid = decodedToken.getUid();
+            String email = decodedToken.getEmail();
+
+            String rol = firebaseRoleService.obtenerRolDeUsuario(uid);
+
+            AuthResponseGoogleDto responseDto = new AuthResponseGoogleDto();
+            responseDto.setIdToken(newIdToken);
+            responseDto.setEmail(email);
+            responseDto.setLocalId(uid);
+            responseDto.setRole(rol);
+
+            return responseDto;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error al refrescar token: " + e.getMessage());
+        }
     }
 }

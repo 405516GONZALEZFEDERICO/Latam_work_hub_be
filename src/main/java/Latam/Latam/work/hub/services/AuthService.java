@@ -9,9 +9,8 @@ import org.springframework.stereotype.Service;
 
 @Service
 public interface AuthService {
-    String syncUser(HttpServletRequest request);
     UserDto obtenerPerfil(HttpServletRequest request);
-    String registrarUsuario(String email, String password,String role);
+    String registrarUsuario(String email, String password);
     AuthResponseDto login(String email, String password);
     String logout(String refreshToken);
     String recuperarContrasenia(String email);
