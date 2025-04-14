@@ -1,8 +1,8 @@
 package Latam.Latam.work.hub.services.impl;
 
+import Latam.Latam.work.hub.dtos.common.CompleteUserDto;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.exceptions.AuthException;
-import Latam.Latam.work.hub.repositories.RoleRepository;
 import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.services.UserService;
 import jakarta.transaction.Transactional;
@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -18,10 +19,8 @@ import java.util.Optional;
 @Slf4j
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
-
     @Transactional
-    public UserEntity createOrUpdateLocalUser(String email, String uid, String urlImg,String name) {
+    public UserEntity createOrUpdateLocalUser(String email, String uid, String photoUrl, String name) {
         Optional<UserEntity> userOpt = userRepository.findByEmail(email);
         UserEntity user;
         if (userOpt.isPresent()) {
@@ -29,9 +28,12 @@ public class UserServiceImpl implements UserService {
 
             if (!Objects.equals(user.getFirebaseUid(), uid)) {
                 user.setFirebaseUid(uid);
-                user.setPhotoUrl(urlImg);
+                user.setPhotoUrl(photoUrl);
                 user.setEmail(email);
                 user.setName(name);
+                user.setEnabled(true);
+                user.setRole(user.getRole());
+                user.setRegistrationDate(LocalDateTime.now());
             }
         } else {
             user = new UserEntity();
@@ -39,7 +41,9 @@ public class UserServiceImpl implements UserService {
             user.setEmail(email);
             user.setEnabled(true);
             user.setFirebaseUid(uid);
-            user.setPhotoUrl(urlImg);
+            user.setPhotoUrl(photoUrl);
+            user.setRole(user.getRole());
+            user.setRegistrationDate(LocalDateTime.now());
         }
         return userRepository.save(user);
     }
@@ -57,4 +61,10 @@ public class UserServiceImpl implements UserService {
 
         return user;
     }
+
+    @Override
+    public CompleteUserDto getCompleteUserData() {
+        return null;
+    }
+
 }

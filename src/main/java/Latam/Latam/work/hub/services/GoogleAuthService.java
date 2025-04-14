@@ -1,6 +1,6 @@
 package Latam.Latam.work.hub.services;
 
-import Latam.Latam.work.hub.dtos.AuthResponseGoogleDto;
+import Latam.Latam.work.hub.security.dtos.AuthResponseGoogleDto;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -10,5 +10,4 @@ public interface GoogleAuthService {
 
     String registerWithGoogle(String idToken);
 
-    AuthResponseGoogleDto refreshGoogleToken(String refreshToken);
 }

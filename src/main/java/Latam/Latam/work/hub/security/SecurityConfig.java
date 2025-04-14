@@ -1,10 +1,9 @@
-package Latam.Latam.work.hub.configs;
+package Latam.Latam.work.hub.security;
 
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -18,26 +17,34 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final FirebaseAuthFilter firebaseAuthFilter;
-    private final CorsConfig corsConfig;
+    private final SecurityPathsConfig securityPathsConfig;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Utiliza el método moderno para deshabilitar CSRF
                 .csrf(AbstractHttpConfigurer::disable)
-                // Configura CORS
-                .cors(Customizer.withDefaults())
-                // Configura las reglas de autorización
+                .cors(cors -> {})
                 .authorizeHttpRequests(auth -> auth
                         // Rutas públicas que no requieren autenticación
-                        .requestMatchers("/api/auth/login", "/api/auth/register", "/api/aut/verificar-rol",
-                                "/api/auth/google/login", "/api/auth/google/register", "/api/auth/google/refresh",
-                                "/api/public/**")
+                        .requestMatchers(securityPathsConfig.PUBLIC_PATHS.toArray(new String[0]))
                         .permitAll()
-                        // Todas las demás rutas requieren autenticación
+                        .requestMatchers("/api/auth/roles/assign").hasAnyRole("DEFAULT")
+                        // Rutas exclusivas para ADMIN
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+
+
+                        // Rutas para ADMIN o PROVEEDOR
+                        .requestMatchers("/api/productos/gestion/**").hasAnyRole("ADMIN", "PROVEEDOR")
+
+                        // Rutas para ADMIN o CLIENTE
+                        .requestMatchers("/api/pedidos/gestion/**").hasAnyRole("ADMIN", "CLIENTE")
+
+                        // Rutas para usuarios autenticados (cualquier rol)
+                        .requestMatchers("/api/perfil/**").authenticated()
+
+                        // Cualquier otra ruta requiere autenticación
                         .anyRequest().authenticated()
                 )
-                // Agrega el filtro personalizado antes del filtro de autenticación estándar
                 .addFilterBefore(firebaseAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

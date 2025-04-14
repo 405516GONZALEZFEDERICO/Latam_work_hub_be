@@ -10,17 +10,25 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-@Table(name = "ROLES")
+
+@Table(name = "SERVICIOS_EXTRA")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-public class RoleEntity {
+public class AmenityEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true)
+    @Column(name = "precio", nullable = true)
+    private Double precio;
+
     private String name;
+
+    @Column(name = "reservation_required")
+    private Boolean reservationRequired;
+
+    private Boolean active = true;
 }

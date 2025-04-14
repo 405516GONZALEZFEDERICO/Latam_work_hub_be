@@ -33,7 +33,8 @@ public class BookingEntity {
     private LocalDateTime startDateTime; 
 
     @Column(name = "end_date")
-    private LocalDateTime endDateTime;  
+    private LocalDateTime endDateTime;
+
 
     @Enumerated(EnumType.STRING)
     private BookingStatus status;         

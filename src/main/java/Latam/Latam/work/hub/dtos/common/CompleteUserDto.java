@@ -1,4 +1,4 @@
-package Latam.Latam.work.hub.dtos;
+package Latam.Latam.work.hub.dtos.common;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,7 +9,6 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AuthResponseDto {
-    private String idToken;   
-    private String expiresIn; 
-    private String role;      
+public class CompleteUserDto {
+ private Long id;
+}

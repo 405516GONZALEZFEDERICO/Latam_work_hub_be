@@ -1,11 +1,10 @@
-package Latam.Latam.work.hub.dtos;
+package Latam.Latam.work.hub.security.dtos;
 
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -15,5 +14,5 @@ public class FirebaseUserInfoDto {
     private String email;
     private String uid;
     private String role;
-    private List<String> permissions;
+
 }

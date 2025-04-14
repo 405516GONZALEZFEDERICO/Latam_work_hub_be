@@ -1,7 +1,6 @@
-package Latam.Latam.work.hub.configs;
+package Latam.Latam.work.hub.security;
 
-
-import Latam.Latam.work.hub.dtos.FirebaseUserInfoDto;
+import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -20,7 +19,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,16 +29,7 @@ import java.util.Map;
 public class FirebaseAuthFilter extends OncePerRequestFilter {
 
     private final FirebaseRoleService firebaseRoleService;
-
-    private final List<String> openPaths = Arrays.asList(
-            "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/google",
-            "/api/auth/refresh-token",
-            "/api/auth/recover-password",
-            "/swagger-ui",
-            "/v3/api-docs"
-    );
+    private final SecurityPathsConfig securityPathsConfig;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -48,7 +37,7 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
 
         String path = request.getRequestURI();
 
-        if (isOpenPath(path)) {
+        if (securityPathsConfig.isPublicPath(path)) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -68,14 +57,8 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             request.setAttribute("firebaseRole", userInfo.getRole());
 
             List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-
             authorities.add(new SimpleGrantedAuthority("ROLE_" + userInfo.getRole()));
 
-            if (userInfo.getPermissions() != null) {
-                for (String permission : userInfo.getPermissions()) {
-                    authorities.add(new SimpleGrantedAuthority(permission));
-                }
-            }
 
             Authentication authentication = new UsernamePasswordAuthenticationToken(
                     userInfo.getEmail(), null, authorities);
@@ -100,10 +83,6 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
         return null;
     }
 
-    private boolean isOpenPath(String path) {
-        return openPaths.stream().anyMatch(path::startsWith);
-    }
-
     private void sendUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json");
@@ -116,6 +95,3 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
         response.getWriter().write(jsonResponse);
     }
 }
-
-
-

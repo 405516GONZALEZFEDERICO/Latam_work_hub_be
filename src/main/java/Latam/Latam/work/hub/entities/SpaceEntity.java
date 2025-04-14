@@ -6,13 +6,16 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+
+import java.util.List;
 
 
 @Entity
@@ -39,8 +42,13 @@ public class SpaceEntity {
     private Boolean available;
     @Column(name = "url_img")
     private String urlImg;
-    @Lob
-    private String amenities;     
+    @ManyToMany
+    @JoinTable(
+            name = "ESPACIO_x_SERVICIO",
+            joinColumns = @JoinColumn(name = "space_id"),
+            inverseJoinColumns = @JoinColumn(name = "amenity_id")
+    )
+    private List<AmenityEntity> amenities;
 
     @ManyToOne
     @JoinColumn(name = "user_id")

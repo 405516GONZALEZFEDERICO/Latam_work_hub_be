@@ -23,14 +23,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorResponse);
     }
 
-    @ExceptionHandler(PermissionException.class)
-    public ResponseEntity<Map<String, String>> handlePermissionException(PermissionException ex) {
-        Map<String, String> errorResponse = new HashMap<>();
-        errorResponse.put("error", "Error de permisos");
-        errorResponse.put("message", ex.getMessage());
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
-    }
 
     @ExceptionHandler(FirebaseAuthException.class)
     public ResponseEntity<Map<String, String>> handleFirebaseAuthException(FirebaseAuthException ex) {

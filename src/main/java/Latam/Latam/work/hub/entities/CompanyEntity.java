@@ -1,19 +1,21 @@
 package Latam.Latam.work.hub.entities;
 
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
-import jakarta.persistence.OneToOne;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Entity
 @Data
@@ -32,12 +34,14 @@ public class CompanyEntity {
 
     @Column(name = "tax_id")
     private String taxId;
+
     private String phone;
+
     private String email;
+
     @Column(name = "web_site")
     private String website;
 
-    @Lob
     private String description;
 
     @Column(name = "registration_date")
@@ -45,8 +49,18 @@ public class CompanyEntity {
 
     private Boolean active;
 
-    @OneToOne
-    @JoinColumn(name = "address_id")
-    private AddressEntity address;
+    @Column(name = "contact_person")
+    private String contactPerson;
+
+    @ManyToOne
+    @JoinColumn(name = "country_id")
+    private CountryEntity country;
+
+
+    @ElementCollection
+    @CollectionTable(name = "EMPRESA_PAIS_OPERACION",
+            joinColumns = @JoinColumn(name = "company_id"))
+    @Column(name = "country_code")
+    private Set<String> operatingCountries;
 
 }

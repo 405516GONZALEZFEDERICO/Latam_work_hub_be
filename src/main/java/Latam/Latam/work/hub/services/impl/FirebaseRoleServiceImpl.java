@@ -1,6 +1,6 @@
 package Latam.Latam.work.hub.services.impl;
 
-import Latam.Latam.work.hub.dtos.FirebaseUserInfoDto;
+import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.entities.RoleEntity;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.exceptions.AuthException;
@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @Service
@@ -29,23 +28,10 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
     private final UserRepository userRepository;
 
     private static final String DEFAULT_ROLE = "DEFAULT";
-    private static final String[] VALID_ROLES = {"ADMIN", "DEFAULT", "CLIENT", "PROVIDER"};
+    private static final String[] VALID_ROLES = {"ADMIN", "DEFAULT", "CLIENTE", "PROVEEDOR"};
 
  
-    @Override
-    public String obtenerRolDeUsuario(String uid) throws FirebaseAuthException {
-        try {
-            UserRecord userRecord = FirebaseAuth.getInstance().getUser(uid);
-            Map<String, Object> claims = userRecord.getCustomClaims();
 
-            return claims != null && claims.containsKey("role")
-                    ? claims.get("role").toString()
-                    : DEFAULT_ROLE;
-        } catch (FirebaseAuthException e) {
-            log.error("Error al obtener rol de usuario {}: {}", uid, e.getMessage());
-            throw e;
-        }
-    }
 
 
 
@@ -147,49 +133,8 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
         }
     }
 
-    @Override
-    @Transactional
-    public void sincronizarRolesConFirebase() {
-        try {
-            log.info("Iniciando sincronización de roles con Firebase");
-            List<UserEntity> users = userRepository.findAll();
-
-            for (UserEntity user : users) {
-                if (user.getFirebaseUid() != null && user.getRole()!=null) {
-                    RoleEntity primaryRole = user.getRole();
-
-                    Map<String, Object> claims = new HashMap<>();
-                    claims.put("role", primaryRole.getName());
-                    claims.put("updated_at", System.currentTimeMillis());
-
-                    FirebaseAuth.getInstance().setCustomUserClaims(user.getFirebaseUid(), claims);
-                }
-            }
-
-            log.info("Sincronización de roles completada para {} usuarios", users.size());
-        } catch (Exception e) {
-            log.error("Error al sincronizar roles con Firebase: {}", e.getMessage());
-            throw new AuthException("Error al sincronizar roles", e);
-        }
-    }
 
 
-    @Override
-    @Transactional
-    public void cambiarRolDeUsuario(String uid, String nuevoRol) throws FirebaseAuthException {
-        if (!isValidRole(nuevoRol)) {
-            throw new AuthException("Rol no válido: " + nuevoRol);
-        }
 
-        asignarRolAFirebaseUser(uid, nuevoRol);
-    }
 
-    private boolean isValidRole(String role) {
-        for (String validRole : VALID_ROLES) {
-            if (validRole.equals(role)) {
-                return true;
-            }
-        }
-        return false;
-    }
 }
