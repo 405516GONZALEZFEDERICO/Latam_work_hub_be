@@ -28,19 +28,12 @@ public class SecurityConfig {
                         // Rutas públicas que no requieren autenticación
                         .requestMatchers(securityPathsConfig.PUBLIC_PATHS.toArray(new String[0]))
                         .permitAll()
-                        .requestMatchers("/api/auth/roles/assign").hasAnyRole("DEFAULT")
+                        .requestMatchers("/api/auth/roles/assign").hasAnyRole("DEFAULT", "ADMIN")
                         // Rutas exclusivas para ADMIN
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
+                        .requestMatchers("/api/users/personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
 
-                        // Rutas para ADMIN o PROVEEDOR
-                        .requestMatchers("/api/productos/gestion/**").hasAnyRole("ADMIN", "PROVEEDOR")
-
-                        // Rutas para ADMIN o CLIENTE
-                        .requestMatchers("/api/pedidos/gestion/**").hasAnyRole("ADMIN", "CLIENTE")
-
-                        // Rutas para usuarios autenticados (cualquier rol)
-                        .requestMatchers("/api/perfil/**").authenticated()
 
                         // Cualquier otra ruta requiere autenticación
                         .anyRequest().authenticated()

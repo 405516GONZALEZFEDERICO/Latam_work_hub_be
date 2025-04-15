@@ -4,16 +4,15 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AuthResponseGoogleDto {
-    private String idToken;
+public class FirebaseUserExtendedInfoDto {
     private String email;
-    private String localId;
+    private String uid;
     private String role;
     private String name;
-    private String photoUrl;
-    private String refreshToken;
+    private String picture;
 }

@@ -35,6 +35,9 @@ public class UserEntity {
     @Column(unique = true,nullable = false)
     private String email;
 
+    private String password;
+
+
     @Column(name = "photo_url")
     private String photoUrl;
 
@@ -76,6 +79,7 @@ public class UserEntity {
     private String jobTitle;
 
     private String department;
+
 
     @ManyToOne
     @JoinColumn(name = "company_id")

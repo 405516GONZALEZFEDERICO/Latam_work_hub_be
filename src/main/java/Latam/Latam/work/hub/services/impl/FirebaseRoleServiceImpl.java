@@ -1,5 +1,6 @@
 package Latam.Latam.work.hub.services.impl;
 
+import Latam.Latam.work.hub.security.dtos.FirebaseUserExtendedInfoDto;
 import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.entities.RoleEntity;
 import Latam.Latam.work.hub.entities.UserEntity;
@@ -28,18 +29,12 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
     private final UserRepository userRepository;
 
     private static final String DEFAULT_ROLE = "DEFAULT";
-    private static final String[] VALID_ROLES = {"ADMIN", "DEFAULT", "CLIENTE", "PROVEEDOR"};
-
- 
-
-
-
 
 
   
     @Override
     @Transactional
-    public void asignarRolAFirebaseUser(String uid, String rolNombre) throws FirebaseAuthException {
+    public void assignRolFirebaseUser(String uid, String rolNombre) throws FirebaseAuthException {
         try {
             RoleEntity rolEntity = roleRepository.findByName(rolNombre)
                     .orElseThrow(() -> new AuthException("Rol no válido: " + rolNombre));
@@ -132,7 +127,35 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
             throw new AuthException("Error al crear usuario", e);
         }
     }
+    @Override
+    public FirebaseUserExtendedInfoDto getExtendedUserInfo(String idToken) {
+        try {
+            // Validar token
+            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(idToken);
+            String email = decodedToken.getEmail();
+            String uid = decodedToken.getUid();
 
+            // Obtener información adicional del usuario
+            UserRecord userRecord = FirebaseAuth.getInstance().getUser(uid);
+            String name = userRecord.getDisplayName() != null ? userRecord.getDisplayName() : "";
+            String picture = userRecord.getPhotoUrl() != null ? userRecord.getPhotoUrl() : "";
+
+            // Obtener el rol (si se implementa diferente en tu servicio actual, ajustar esta parte)
+            FirebaseUserInfoDto basicInfo = verificarRol(idToken);
+            String role = basicInfo.getRole();
+
+            return FirebaseUserExtendedInfoDto.builder()
+                    .email(email)
+                    .uid(uid)
+                    .name(name)
+                    .picture(picture)
+                    .role(role)
+                    .build();
+        } catch (FirebaseAuthException e) {
+            log.error("Error al validar token de Firebase: {}", e.getMessage());
+            throw new AuthException("Token inválido: " + e.getMessage());
+        }
+    }
 
 
 

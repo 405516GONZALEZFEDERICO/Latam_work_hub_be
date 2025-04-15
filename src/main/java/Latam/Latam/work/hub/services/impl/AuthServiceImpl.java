@@ -30,11 +30,7 @@ public class AuthServiceImpl implements AuthService {
     private final FirebaseRoleService firebaseRoleService;
     private final FirebaseAuthRestService authRestService;
 
-
-
-    /**
-     * Registra un nuevo usuario
-     */
+    @Override
     @Transactional
     public String registerUser(String email, String password) {
         if (email == null || email.isEmpty() || !email.contains("@")) {
@@ -60,9 +56,13 @@ public class AuthServiceImpl implements AuthService {
             UserRecord userRecord = FirebaseAuth.getInstance().createUser(request);
             String uid = userRecord.getUid();
 
-            userService.createOrUpdateLocalUser(email, uid,userRecord.getPhotoUrl(),userRecord.getDisplayName());
+            UserEntity user = userService.createOrUpdateLocalUser(email, uid, userRecord.getPhotoUrl(), userRecord.getDisplayName());
 
-            firebaseRoleService.asignarRolAFirebaseUser(uid,"DEFAULT" );
+            if (!user.isEnabled()) {
+                throw new AuthException("No se pudo habilitar el usuario correctamente");
+            }
+
+            firebaseRoleService.assignRolFirebaseUser(uid, "DEFAULT");
 
             return "Usuario registrado con éxito: " + uid;
         } catch (FirebaseAuthException e) {
@@ -72,9 +72,8 @@ public class AuthServiceImpl implements AuthService {
     }
 
 
-    /**
-     * Inicia sesión con email y contraseña
-     */
+
+    @Transactional
     public AuthResponseDto login(String email, String password) {
         if (email == null || email.isEmpty()) {
             throw new AuthException("Email es requerido");
@@ -118,7 +117,8 @@ public class AuthServiceImpl implements AuthService {
     /**
      * Envía un correo de recuperación de contraseña
      */
-    public String getPasswordForgoted(String email) {
+    @Transactional
+    public String retrievePassword(String email) {
         try {
             userService.validateUserExists(email);
             authRestService.sendPasswordResetEmail(email);
@@ -128,6 +128,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AuthException("Error al procesar solicitud de recuperación");
         }
     }
+
 
 
 }

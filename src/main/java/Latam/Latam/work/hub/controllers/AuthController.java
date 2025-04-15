@@ -39,18 +39,22 @@ public class AuthController {
         try {
             AuthResponseGoogleDto response = googleAuthService.loginWithGoogle(idToken);
             return ResponseEntity.ok(response);
-        } catch (Exception e) {
+        } catch (AuthException e) {
+            log.error("Error en login con Google: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(null);
         }
     }
 
+
     @PostMapping("/google/register")
     public ResponseEntity<String> registerWithGoogle(@RequestParam String idToken) {
         try {
-            String response = googleAuthService.registerWithGoogle(idToken);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
+            // La validación de usuario habilitado ahora se realiza en el servicio
+            String result = googleAuthService.registerWithGoogle(idToken);
+            return ResponseEntity.ok(result);
+        } catch (AuthException e) {
+            log.error("Error en registro con Google: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(e.getMessage());
         }
@@ -72,10 +76,10 @@ public class AuthController {
 
 
     @PostMapping("/roles/assign")
-    @PreAuthorize("hasRole('DEFAULT')")
-        public ResponseEntity<?> assignRoleToUser(@RequestBody RoleAssignmentRequestDto request) {
+    @PreAuthorize("hasRole('DEFAULT') || hasRole('ADMIN')")
+    public ResponseEntity<?> assignRoleToUser(@RequestBody RoleAssignmentRequestDto request) {
         try {
-            firebaseRoleService.asignarRolAFirebaseUser(request.getUid(), request.getRoleName());
+            firebaseRoleService.assignRolFirebaseUser(request.getUid(), request.getRoleName());
             return ResponseEntity.ok().body(
                     Map.of(
                             "success", true,
@@ -102,7 +106,7 @@ public class AuthController {
     }
     @GetMapping("/recuperar-contrasenia")
     public ResponseEntity<String> recuperarContrasenia(@RequestParam String email) {
-        return ResponseEntity.ok(authService.getPasswordForgoted(email));
+        return ResponseEntity.ok(authService.retrievePassword(email));
     }
 
     @GetMapping("/verificar-rol")
@@ -115,9 +119,6 @@ public class AuthController {
                     .body(null);
         }
     }
-
-
-
 
 
 }
