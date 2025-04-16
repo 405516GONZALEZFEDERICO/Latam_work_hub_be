@@ -37,7 +37,6 @@ public class UserEntity {
 
     private String password;
 
-
     @Column(name = "photo_url")
     private String photoUrl;
 
@@ -55,9 +54,6 @@ public class UserEntity {
 
     @Column(name = "last_access")
     private LocalDateTime lastAccess;
-
-    @Column(name = "birth_date")
-    private LocalDate birthDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "document_type")

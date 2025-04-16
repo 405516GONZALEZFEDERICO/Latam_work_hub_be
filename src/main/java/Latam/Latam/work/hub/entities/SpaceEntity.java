@@ -31,7 +31,7 @@ public class SpaceEntity {
     private String name;
     private String description;
     private Integer capacity;
-    private Double area;         
+    private Double area;
     @Column(name = "price_per_hour")
     private Double pricePerHour;
     @Column(name = "price_per_day")
@@ -52,13 +52,15 @@ public class SpaceEntity {
 
     @ManyToOne
     @JoinColumn(name = "user_id")
-    private UserEntity owner;  
+    private UserEntity owner;
     @ManyToOne
     @JoinColumn(name = "type_id")
     private SpaceTypeEntity type;
     @ManyToOne
     @JoinColumn(name = "address_id")
     private AddressEntity address;
+
+
 
 }
 

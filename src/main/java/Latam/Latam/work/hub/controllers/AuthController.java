@@ -50,7 +50,6 @@ public class AuthController {
     @PostMapping("/google/register")
     public ResponseEntity<String> registerWithGoogle(@RequestParam String idToken) {
         try {
-            // La validación de usuario habilitado ahora se realiza en el servicio
             String result = googleAuthService.registerWithGoogle(idToken);
             return ResponseEntity.ok(result);
         } catch (AuthException e) {

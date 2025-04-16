@@ -1,13 +1,13 @@
 package Latam.Latam.work.hub.entities;
 
-import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -55,12 +55,5 @@ public class CompanyEntity {
     @ManyToOne
     @JoinColumn(name = "country_id")
     private CountryEntity country;
-
-
-    @ElementCollection
-    @CollectionTable(name = "EMPRESA_PAIS_OPERACION",
-            joinColumns = @JoinColumn(name = "company_id"))
-    @Column(name = "country_code")
-    private Set<String> operatingCountries;
 
 }

@@ -42,10 +42,13 @@ public class RentalContractEntity {
     private Double depositAmount;         
 
     @Column(name = "duration_months")
-    private Integer durationMonths;       
+    private Double durationMonths;
 
     @Enumerated(EnumType.STRING)
-    private ContractStatus status;       
+    private ContractStatus status;
+
+    @Column(name = "grace_period")
+    private Integer gracePeriod;
 
     @ManyToOne
     @JoinColumn(name = "space_id")

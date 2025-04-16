@@ -34,5 +34,4 @@ public class AddressEntity {
     @ManyToOne
     @JoinColumn(name = "city_id")
     private CityEntity city;
-
 }

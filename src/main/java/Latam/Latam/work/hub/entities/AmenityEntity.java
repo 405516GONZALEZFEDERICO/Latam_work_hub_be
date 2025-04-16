@@ -22,13 +22,10 @@ public class AmenityEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "precio", nullable = true)
-    private Double precio;
+    @Column(name = "price", nullable = true)
+    private Double price;
 
     private String name;
-
-    @Column(name = "reservation_required")
-    private Boolean reservationRequired;
 
     private Boolean active = true;
 }

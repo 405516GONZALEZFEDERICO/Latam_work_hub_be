@@ -11,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -50,11 +51,11 @@ public class InvoiceEntity {
     private InvoiceStatus status;        
 
   
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "booking_id")
     private BookingEntity booking;      
 
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "rental_contract_id")
     private RentalContractEntity rentalContract; 
 
