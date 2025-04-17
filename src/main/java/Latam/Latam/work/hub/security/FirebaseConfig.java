@@ -12,7 +12,7 @@ public class FirebaseConfig {
     @PostConstruct
     public void initFirebase() {
         try {
-            FileInputStream serviceAccount = new FileInputStream("src/main/resources/firebase/firebase-config.json");
+            FileInputStream serviceAccount = new FileInputStream("src/main/resources/firebase-config.json");
 
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))
