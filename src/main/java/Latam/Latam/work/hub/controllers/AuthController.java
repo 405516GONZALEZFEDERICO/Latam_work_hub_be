@@ -1,10 +1,10 @@
 package Latam.Latam.work.hub.controllers;
 
+import Latam.Latam.work.hub.dtos.common.RoleAssignmentRequestDto;
+import Latam.Latam.work.hub.exceptions.AuthException;
 import Latam.Latam.work.hub.security.dtos.AuthResponseDto;
 import Latam.Latam.work.hub.security.dtos.AuthResponseGoogleDto;
 import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
-import Latam.Latam.work.hub.dtos.common.RoleAssignmentRequestDto;
-import Latam.Latam.work.hub.exceptions.AuthException;
 import Latam.Latam.work.hub.services.AuthService;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
 import Latam.Latam.work.hub.services.GoogleAuthService;
@@ -15,6 +15,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -77,6 +79,8 @@ public class AuthController {
     @PostMapping("/roles/assign")
     @PreAuthorize("hasRole('DEFAULT') || hasRole('ADMIN')")
     public ResponseEntity<?> assignRoleToUser(@RequestBody RoleAssignmentRequestDto request) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        System.out.println("Authorities: " + auth.getAuthorities());
         try {
             firebaseRoleService.assignRolFirebaseUser(request.getUid(), request.getRoleName());
             return ResponseEntity.ok().body(

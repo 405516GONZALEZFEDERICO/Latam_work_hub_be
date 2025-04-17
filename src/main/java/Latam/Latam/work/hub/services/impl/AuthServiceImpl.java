@@ -42,19 +42,15 @@ public class AuthServiceImpl implements AuthService {
             throw new AuthException("Contraseña debe tener al menos 6 caracteres");
         }
 
-        // Verificar en base de datos local
         Optional<UserEntity> existingUser = userRepository.findByEmail(email);
         if (existingUser.isPresent()) {
             throw new AuthException("El email ya está registrado");
         }
 
-        // Verificar en Firebase
         try {
             FirebaseAuth.getInstance().getUserByEmail(email);
-            // Si llega aquí, el usuario existe en Firebase
             throw new AuthException("El email ya está registrado en el sistema de autenticación");
         } catch (FirebaseAuthException e) {
-            // Si es una excepción de tipo USER_NOT_FOUND, continuamos con el registro
             if (!e.getAuthErrorCode().equals(AuthErrorCode.USER_NOT_FOUND)) {
                 log.error("Error al verificar usuario en Firebase: {}", e.getMessage());
                 throw new AuthException("Error al verificar usuario: " + e.getMessage());
@@ -87,7 +83,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
 
-
+    @Override
     @Transactional
     public AuthResponseDto login(String email, String password) {
         if (email == null || email.isEmpty()) {
@@ -99,7 +95,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         try {
-            UserEntity user = userService.validateUserExists(email);
+            userService.validateUserExists(email);
 
             Map<String, Object> responseBody = authRestService.signInWithEmailAndPassword(email, password);
 
@@ -128,10 +124,7 @@ public class AuthServiceImpl implements AuthService {
     }
 
 
-
-    /**
-     * Envía un correo de recuperación de contraseña
-     */
+    @Override
     @Transactional
     public String retrievePassword(String email) {
         try {

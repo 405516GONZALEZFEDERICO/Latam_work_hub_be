@@ -36,7 +36,6 @@ public class UserServiceImpl implements UserService {
                 user.setEmail(email);
                 user.setName(name);
                 user.setEnabled(true);
-                user.setRole(user.getRole());
                 user.setRegistrationDate(LocalDateTime.now());
             }
         } else {
@@ -46,7 +45,6 @@ public class UserServiceImpl implements UserService {
             user.setEnabled(true);
             user.setFirebaseUid(uid);
             user.setPhotoUrl(photoUrl);
-            user.setRole(user.getRole());
             user.setRegistrationDate(LocalDateTime.now());
         }
         return userRepository.save(user);
