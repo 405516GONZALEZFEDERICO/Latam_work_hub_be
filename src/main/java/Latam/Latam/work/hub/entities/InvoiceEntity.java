@@ -53,14 +53,12 @@ public class InvoiceEntity {
   
     @OneToOne
     @JoinColumn(name = "booking_id")
-    private BookingEntity booking;      
+    private BookingEntity booking;
 
     @OneToOne
     @JoinColumn(name = "rental_contract_id")
     private RentalContractEntity rentalContract; 
 
-    @ManyToOne
-    @JoinColumn(name = "user_id")
-    private UserEntity user;
+
 }
 

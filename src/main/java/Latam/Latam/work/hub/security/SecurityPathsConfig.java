@@ -12,7 +12,7 @@ public class SecurityPathsConfig {
             "/api/auth/register",
             "/api/auth/verificar-rol",
             "/api/auth/google/**",
-            "/api/auth/recover-password",
+            "/api/auth/recuperar-contrasenia",
             "/api/public/**",
             "/swagger-ui/**",
             "/v3/api-docs/**"

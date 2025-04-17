@@ -15,5 +15,4 @@ public class AuthResponseGoogleDto {
     private String role;
     private String name;
     private String photoUrl;
-    private String refreshToken;
 }

@@ -35,6 +35,8 @@ public class BookingEntity {
     @Column(name = "end_date")
     private LocalDateTime endDateTime;
 
+    private Boolean active;
+
 
     @Enumerated(EnumType.STRING)
     private BookingStatus status;         

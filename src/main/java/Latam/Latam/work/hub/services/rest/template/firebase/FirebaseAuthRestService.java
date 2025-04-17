@@ -2,6 +2,8 @@ package Latam.Latam.work.hub.services.rest.template.firebase;
 
 import Latam.Latam.work.hub.exceptions.AuthException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -17,7 +19,9 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class FirebaseAuthRestService {
-    private final String firebaseApiKey= "AIzaSyB9b7mzFtoRDNB0YroNRe6tF9uQFGfvzXQ";
+    @Value("${firebase.api.key}")
+    private String firebaseApiKey;
+
     private final RestTemplate restTemplate;
     public Map<String, Object> signInWithEmailAndPassword(String email, String password) {
         String firebaseAuthUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=" + firebaseApiKey;

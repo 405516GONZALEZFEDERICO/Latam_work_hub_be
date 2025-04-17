@@ -31,7 +31,7 @@ public class GoogleAuthServiceImpl implements GoogleAuthService {
             // Usar el nuevo método para obtener información extendida
             FirebaseUserExtendedInfoDto userExtendedInfo = firebaseRoleService.getExtendedUserInfo(idToken);
 
-            // Verificar que el usuario existe y está habilitado
+            // Verificar que el usuario existe y está habilitado en la base de datos local
             UserEntity user = userRepository.findByEmail(userExtendedInfo.getEmail())
                     .orElseThrow(() -> new AuthException("Usuario no encontrado"));
 
@@ -49,7 +49,6 @@ public class GoogleAuthServiceImpl implements GoogleAuthService {
                     .name(userExtendedInfo.getName())
                     .photoUrl(userExtendedInfo.getPicture())
                     .role(userExtendedInfo.getRole())
-                    .refreshToken(null) // Si necesitas un refreshToken, deberías obtenerlo
                     .build();
         } catch (AuthException e) {
             log.error("Error al iniciar sesión con Google: {}", e.getMessage());

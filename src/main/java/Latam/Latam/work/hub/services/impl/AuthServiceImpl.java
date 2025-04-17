@@ -1,14 +1,15 @@
 package Latam.Latam.work.hub.services.impl;
 
-import Latam.Latam.work.hub.security.dtos.AuthResponseDto;
-import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.exceptions.AuthException;
 import Latam.Latam.work.hub.repositories.UserRepository;
+import Latam.Latam.work.hub.security.dtos.AuthResponseDto;
+import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.services.AuthService;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
 import Latam.Latam.work.hub.services.UserService;
 import Latam.Latam.work.hub.services.rest.template.firebase.FirebaseAuthRestService;
+import com.google.firebase.auth.AuthErrorCode;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.UserRecord;
@@ -41,9 +42,23 @@ public class AuthServiceImpl implements AuthService {
             throw new AuthException("Contraseña debe tener al menos 6 caracteres");
         }
 
+        // Verificar en base de datos local
         Optional<UserEntity> existingUser = userRepository.findByEmail(email);
         if (existingUser.isPresent()) {
             throw new AuthException("El email ya está registrado");
+        }
+
+        // Verificar en Firebase
+        try {
+            FirebaseAuth.getInstance().getUserByEmail(email);
+            // Si llega aquí, el usuario existe en Firebase
+            throw new AuthException("El email ya está registrado en el sistema de autenticación");
+        } catch (FirebaseAuthException e) {
+            // Si es una excepción de tipo USER_NOT_FOUND, continuamos con el registro
+            if (!e.getAuthErrorCode().equals(AuthErrorCode.USER_NOT_FOUND)) {
+                log.error("Error al verificar usuario en Firebase: {}", e.getMessage());
+                throw new AuthException("Error al verificar usuario: " + e.getMessage());
+            }
         }
 
         try {

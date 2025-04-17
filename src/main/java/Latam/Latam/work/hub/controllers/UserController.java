@@ -7,7 +7,7 @@ import Latam.Latam.work.hub.services.UserService;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,14 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/users")
+@RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
-
-    @Autowired
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
 
     @PostMapping("/personal-data")
     @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR')")
@@ -34,13 +30,10 @@ public class UserController {
             @RequestBody PersonalDataUserDto personalDataUserDto,
             @RequestHeader("Authorization") String authorization) {
 
-        // Extraer el token JWT del encabezado
         String token = authorization.replace("Bearer ", "");
-
         try {
-            // Verificar y decodificar el token para obtener el UID
             FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token);
-            String uid = decodedToken.getUid(); // Esto extrae el UID del token
+            String uid = decodedToken.getUid(); 
 
             PersonalDataUserDto result = userService.createOrUpdatePersonalDataUser(personalDataUserDto, uid);
             return new ResponseEntity<>(result, HttpStatus.OK);

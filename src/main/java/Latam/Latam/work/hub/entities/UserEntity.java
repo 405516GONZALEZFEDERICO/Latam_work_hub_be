@@ -49,6 +49,9 @@ public class UserEntity {
     @Column(name = "full_name")
     private String name;
 
+    @Column(name = "birth_day")
+    private LocalDate birthDay;
+
     @Column(name = "registration_date")
     private LocalDateTime registrationDate;
 
