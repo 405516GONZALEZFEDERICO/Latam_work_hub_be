@@ -67,6 +67,7 @@ class FirebaseRoleServiceImplTest {
     @Test
     void assignRolFirebaseUser_ConRolValido_DebeAsignarRol() throws FirebaseAuthException {
         String roleName = "ADMIN";
+        RoleEntity roleEntity = new RoleEntity();
         roleEntity.setName(roleName);
 
         UserEntity userEntity = new UserEntity();
@@ -220,6 +221,7 @@ class FirebaseRoleServiceImplTest {
         FirebaseAuthException mockedException = mock(FirebaseAuthException.class);
         when(mockedException.getMessage()).thenReturn("Token inválido");
 
+        doThrow(mockedException).when(firebaseRoleService).verificarRol(idToken);
 
         FirebaseAuthException exception = assertThrows(FirebaseAuthException.class, () -> {
             firebaseRoleService.verificarRol(idToken);

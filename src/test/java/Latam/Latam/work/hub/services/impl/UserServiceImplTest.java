@@ -95,6 +95,7 @@ class UserServiceImplTest {
         });
 
         UserEntity result = userService.createOrUpdateLocalUser(
+                "new@example.com", "new-uid", "http://photo.url", "New User");
 
         verify(userRepository).findByEmail("new@example.com");
         verify(userRepository).save(any(UserEntity.class));
