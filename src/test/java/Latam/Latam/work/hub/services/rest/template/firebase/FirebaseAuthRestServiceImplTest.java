@@ -24,18 +24,18 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @SpringBootTest
-class FirebaseAuthRestServiceTest {
+class FirebaseAuthRestServiceImplTest {
     @MockitoBean
     private RestTemplate restTemplate;
 
     @MockitoSpyBean
-    private FirebaseAuthRestService firebaseAuthRestService;
+    private FirebaseAuthRestServiceImpl firebaseAuthRestServiceImpl;
 
     private final String API_KEY = "test-api-key";
 
     @BeforeEach
     void setUp() {
-        ReflectionTestUtils.setField(firebaseAuthRestService, "firebaseApiKey", API_KEY);
+        ReflectionTestUtils.setField(firebaseAuthRestServiceImpl, "firebaseApiKey", API_KEY);
     }
 
     @Test
@@ -57,7 +57,7 @@ class FirebaseAuthRestServiceTest {
                 ArgumentMatchers.<Class<Map>>any()
         )).thenReturn(successResponseEntity);
 
-        Map<String, Object> result = firebaseAuthRestService.signInWithEmailAndPassword(email, password);
+        Map<String, Object> result = firebaseAuthRestServiceImpl.signInWithEmailAndPassword(email, password);
 
         assertNotNull(result);
         assertEquals("token-prueba", result.get("idToken"));
@@ -87,7 +87,7 @@ class FirebaseAuthRestServiceTest {
         )).thenThrow(authException);
 
         AuthException thrownException = assertThrows(AuthException.class, () -> {
-            firebaseAuthRestService.signInWithEmailAndPassword(email, password);
+            firebaseAuthRestServiceImpl.signInWithEmailAndPassword(email, password);
         });
 
         assertTrue(thrownException.getMessage().contains("Credenciales inválidas"));
@@ -109,7 +109,7 @@ class FirebaseAuthRestServiceTest {
                 ArgumentMatchers.<Class<Map>>any()
         )).thenReturn(successResponseEntity);
 
-        Map<String, Object> result = firebaseAuthRestService.sendPasswordResetEmail(email);
+        Map<String, Object> result = firebaseAuthRestServiceImpl.sendPasswordResetEmail(email);
 
         assertNotNull(result);
         assertEquals(email, result.get("email"));
@@ -138,7 +138,7 @@ class FirebaseAuthRestServiceTest {
         )).thenThrow(emailException);
 
         AuthException thrownException = assertThrows(AuthException.class, () -> {
-            firebaseAuthRestService.sendPasswordResetEmail(email);
+            firebaseAuthRestServiceImpl.sendPasswordResetEmail(email);
         });
 
         assertTrue(thrownException.getMessage().contains("Error al enviar correo de recuperación"));
