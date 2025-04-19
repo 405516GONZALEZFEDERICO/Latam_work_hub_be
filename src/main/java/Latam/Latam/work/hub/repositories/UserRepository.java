@@ -8,14 +8,6 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserEntity, Long> {
-    /**
-     * Busca un usuario por su email
-     */
     Optional<UserEntity> findByEmail(String email);
-
-    /**
-     * Busca un usuario por su identificador de Firebase
-     */
     Optional<UserEntity> findByFirebaseUid(String firebaseUid);
-
 }

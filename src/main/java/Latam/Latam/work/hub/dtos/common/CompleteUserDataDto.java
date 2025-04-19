@@ -13,6 +13,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CompleteUserDataDto {
+    private String photoUrl;
     private String name;
     private LocalDate birthDate;
     private String documentNumber;

@@ -8,7 +8,7 @@ import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.services.AuthService;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
 import Latam.Latam.work.hub.services.UserService;
-import Latam.Latam.work.hub.services.rest.template.firebase.FirebaseAuthRestService;
+import Latam.Latam.work.hub.services.rest.template.firebase.FirebaseAuthRestServiceImpl;
 import com.google.firebase.auth.AuthErrorCode;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -29,7 +29,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final UserService userService;
     private final FirebaseRoleService firebaseRoleService;
-    private final FirebaseAuthRestService authRestService;
+    private final FirebaseAuthRestServiceImpl authRestService;
 
     @Override
     @Transactional
