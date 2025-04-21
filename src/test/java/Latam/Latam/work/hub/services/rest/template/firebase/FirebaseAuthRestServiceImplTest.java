@@ -1,6 +1,7 @@
 package Latam.Latam.work.hub.services.rest.template.firebase;
 
 import Latam.Latam.work.hub.exceptions.AuthException;
+import Latam.Latam.work.hub.services.rest.template.firebase.impl.FirebaseAuthRestServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;

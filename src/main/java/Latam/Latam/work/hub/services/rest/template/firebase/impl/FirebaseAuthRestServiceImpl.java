@@ -1,6 +1,7 @@
-package Latam.Latam.work.hub.services.rest.template.firebase;
+package Latam.Latam.work.hub.services.rest.template.firebase.impl;
 
 import Latam.Latam.work.hub.exceptions.AuthException;
+import Latam.Latam.work.hub.services.rest.template.firebase.FirebaseAuthRestService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 

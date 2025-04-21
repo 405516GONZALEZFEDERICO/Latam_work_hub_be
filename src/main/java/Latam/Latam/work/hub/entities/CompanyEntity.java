@@ -39,7 +39,6 @@ public class CompanyEntity {
     @Column(name = "web_site")
     private String website;
 
-    private String description;
 
     @Column(name = "registration_date")
     private LocalDateTime registrationDate;

@@ -79,11 +79,12 @@ public class UserServiceImpl implements UserService {
     @Override
     public PersonalDataUserDto createOrUpdatePersonalDataUser(PersonalDataUserDto personalDataUserDto,String uid) {
         UserEntity user = userRepository.findByFirebaseUid(uid).orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-
+        user.setBirthDay(personalDataUserDto.getBirthDate());
         if (!user.isEnabled()) {
             throw  new IllegalStateException("Usuario deshabilitado");
         }
         modelMapperConfig.modelMapper().map(personalDataUserDto, user);
+
         userRepository.save(user);
         return personalDataUserDto;
     }

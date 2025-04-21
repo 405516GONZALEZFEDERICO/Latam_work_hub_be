@@ -62,14 +62,12 @@ public class UserController {
             @RequestParam("image") MultipartFile image) {
 
         try {
-            // Validate image size (5MB max)
             if (image.getSize() > 5 * 1024 * 1024) {
                 return ResponseEntity
                         .badRequest()
                         .body("La imagen no puede superar los 5MB");
             }
 
-            // Validate image type
             String contentType = image.getContentType();
             if (contentType == null || !contentType.startsWith("image/")) {
                 return ResponseEntity
@@ -110,4 +108,5 @@ public class UserController {
     public ResponseEntity<CompleteUserDataDto> getPersonalData(@PathVariable String uid) {
         return ResponseEntity.ok(this.userService.getPersonalDataUser(uid));
     }
+
 }

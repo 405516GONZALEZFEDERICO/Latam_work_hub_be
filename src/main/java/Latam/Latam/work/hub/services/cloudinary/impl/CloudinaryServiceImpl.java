@@ -1,5 +1,6 @@
-package Latam.Latam.work.hub.services.cloudinary;
+package Latam.Latam.work.hub.services.cloudinary.impl;
 
+import Latam.Latam.work.hub.services.cloudinary.CloudinaryService;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;

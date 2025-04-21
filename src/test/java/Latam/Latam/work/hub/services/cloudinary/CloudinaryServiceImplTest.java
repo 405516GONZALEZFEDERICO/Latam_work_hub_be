@@ -1,5 +1,6 @@
 package Latam.Latam.work.hub.services.cloudinary;
 
+import Latam.Latam.work.hub.services.cloudinary.impl.CloudinaryServiceImpl;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.Uploader;
 import org.junit.jupiter.api.BeforeEach;

@@ -36,6 +36,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/users/personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/users/*/upload-img").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/users/get-personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
+                        .requestMatchers("/api/location/*").hasAnyRole("CLIENTE", "PROVEEDOR")
+                        .requestMatchers("/api/company/*").hasAnyRole("CLIENTE", "PROVEEDOR")
+                        .requestMatchers("/api/payments/*").hasAnyRole("CLIENTE", "PROVEEDOR")
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(firebaseAuthFilter, UsernamePasswordAuthenticationFilter.class);
