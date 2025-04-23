@@ -7,6 +7,7 @@ import Latam.Latam.work.hub.entities.CountryEntity;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.enums.ProviderType;
 import Latam.Latam.work.hub.repositories.CompanyRepository;
+import Latam.Latam.work.hub.repositories.CountryRepository;
 import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.services.CompanyService;
 import jakarta.transaction.Transactional;
@@ -22,15 +23,26 @@ public class CompanyServiceImpl implements CompanyService {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final ModelMapperConfig modelMapperConfig;
+    private final CountryRepository countryRepository;
     @Override
     @Transactional
     public CompanyInfoDto createOrUpdateCompanyUser(String uid, CompanyInfoDto companyInfoDto) {
-        if (companyInfoDto == null || companyInfoDto.getProviderType() == null || companyInfoDto.getProviderType().isEmpty()) {
-            throw new IllegalArgumentException("CompanyInfoDto or providerType cannot be null or empty");
+        if (companyInfoDto == null) {
+            throw new IllegalArgumentException("CompanyInfoDto cannot be null");
         }
 
         UserEntity user = this.userRepository.findByFirebaseUid(uid)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        // Si es CLIENTE, solo se maneja la asociación de compañía
+        if (user.getRole().equals("CLIENTE")) {
+            return handleClientCompany(user, companyInfoDto);
+        }
+
+        // Para PROVEEDOR, validar y manejar el tipo de proveedor
+        if (companyInfoDto.getProviderType() == null || companyInfoDto.getProviderType().isEmpty()) {
+            throw new IllegalArgumentException("ProviderType is required for providers");
+        }
 
         if (ProviderType.INDIVIDUAL.name().equals(companyInfoDto.getProviderType())) {
             return handleIndividualProvider(user, companyInfoDto);
@@ -40,51 +52,51 @@ public class CompanyServiceImpl implements CompanyService {
             throw new IllegalArgumentException("ProviderType not valid: " + companyInfoDto.getProviderType());
         }
     }
+    private CompanyInfoDto handleClientCompany(UserEntity user, CompanyInfoDto companyInfoDto) {
+        CompanyEntity companyEntity = user.getCompany() != null ? user.getCompany() : new CompanyEntity();
 
+        updateCompanyFromDto(companyEntity, companyInfoDto);
+        companyEntity.setRegistrationDate(companyEntity.getRegistrationDate() != null ?
+                companyEntity.getRegistrationDate() : LocalDateTime.now());
+        companyEntity.setActive(true);
+
+        companyEntity = companyRepository.save(companyEntity);
+        user.setCompany(companyEntity);
+        userRepository.save(user);
+
+        return convertCompanyEntityToDto(companyEntity);
+    }
     /**
      * Maneja la lógica para proveedores de tipo individual
      */
     private CompanyInfoDto handleIndividualProvider(UserEntity user, CompanyInfoDto companyInfoDto) {
         user.setProviderType(ProviderType.INDIVIDUAL);
-        // Si el usuario ya tenía una compañía asociada, desasociarla
         user.setCompany(null);
         userRepository.save(user);
-        // Devolver los datos básicos para proveedores individuales
         return companyInfoDto;
     }
 
     /**
      * Maneja la lógica para proveedores de tipo empresa
      */
+
+
     private CompanyInfoDto handleCompanyProvider(UserEntity user, CompanyInfoDto companyInfoDto) {
-        user.setProviderType(ProviderType.COMPANY);
-
-        // Verificar si el usuario ya tiene una compañía
-        CompanyEntity companyEntity;
-        boolean isNewCompany = false;
-
-        if (user.getCompany() != null) {
-            // Actualizar la compañía existente
-            companyEntity = user.getCompany();
-        } else {
-            // Crear una nueva compañía
-            companyEntity = new CompanyEntity();
-            companyEntity.setRegistrationDate(LocalDateTime.now());
-            companyEntity.setActive(true);
-            isNewCompany = true;
+        if (companyInfoDto.getName() == null || companyInfoDto.getName().isEmpty()) {
+            throw new IllegalArgumentException("Company information is required for COMPANY provider type");
         }
 
-        // Actualizar los datos de la compañía
+        user.setProviderType(ProviderType.COMPANY);
+        CompanyEntity companyEntity = user.getCompany() != null ? user.getCompany() : new CompanyEntity();
+
         updateCompanyFromDto(companyEntity, companyInfoDto);
+        companyEntity.setRegistrationDate(companyEntity.getRegistrationDate() != null ? companyEntity.getRegistrationDate() : LocalDateTime.now());
+        companyEntity.setActive(true);
 
-        // Guardar la compañía
-        companyEntity = this.companyRepository.save(companyEntity);
-
-        // Asignar la compañía al usuario y guardar
+        companyEntity = companyRepository.save(companyEntity);
         user.setCompany(companyEntity);
-        this.userRepository.save(user);
+        userRepository.save(user);
 
-        // Convertir entidad a DTO para respuesta
         return convertCompanyEntityToDto(companyEntity);
     }
 
@@ -99,11 +111,14 @@ public class CompanyServiceImpl implements CompanyService {
         companyEntity.setEmail(companyInfoDto.getEmail());
         companyEntity.setWebsite(companyInfoDto.getWebsite());
         companyEntity.setContactPerson(companyInfoDto.getContactPerson());
+        companyEntity.setRegistrationDate(LocalDateTime.now());
+        companyEntity.setActive(true);
 
-        // Asignar el país manualmente
+        // Buscar y asignar el país
         if (companyInfoDto.getCountry() != null) {
-            CountryEntity countryEntity = new CountryEntity();
-            countryEntity.setId(companyInfoDto.getCountry().longValue());
+            CountryEntity countryEntity = countryRepository
+                    .findById(companyInfoDto.getCountry().longValue())
+                    .orElseThrow(() -> new IllegalArgumentException("País no encontrado con ID: " + companyInfoDto.getCountry()));
             companyEntity.setCountry(countryEntity);
         } else {
             companyEntity.setCountry(null);
@@ -114,13 +129,22 @@ public class CompanyServiceImpl implements CompanyService {
      * Convierte la entidad de compañía a DTO usando ModelMapper de forma segura
      */
     private CompanyInfoDto convertCompanyEntityToDto(CompanyEntity companyEntity) {
-        // Utilizamos ModelMapper pero con configuración para evitar problemas de optimistic locking
-        CompanyInfoDto resultDto = this.modelMapperConfig.modelMapper().map(companyEntity, CompanyInfoDto.class);
+        // Primero crear el DTO sin el campo country
+        CompanyInfoDto resultDto = new CompanyInfoDto();
 
-        // Asegurarnos de que el ProviderType esté correctamente establecido
+        // Mapear manualmente los campos básicos
+        resultDto.setName(companyEntity.getName());
+        resultDto.setLegalName(companyEntity.getLegalName());
+        resultDto.setTaxId(companyEntity.getTaxId());
+        resultDto.setPhone(companyEntity.getPhone());
+        resultDto.setEmail(companyEntity.getEmail());
+        resultDto.setWebsite(companyEntity.getWebsite());
+        resultDto.setContactPerson(companyEntity.getContactPerson());
+
+        // Establecer el tipo de proveedor
         resultDto.setProviderType(ProviderType.COMPANY.name());
 
-        // Ajustar el campo de país para evitar problemas de mapeo
+        // Mapear el ID del país si existe
         if (companyEntity.getCountry() != null) {
             resultDto.setCountry(companyEntity.getCountry().getId().intValue());
         }
@@ -135,7 +159,19 @@ public class CompanyServiceImpl implements CompanyService {
 
         CompanyEntity companyEntity = user.getCompany();
         if(companyEntity == null){
-            throw new IllegalArgumentException("Company not found");
+            CompanyInfoDto emptyDto = new CompanyInfoDto();
+            emptyDto.setName("");
+            emptyDto.setLegalName("");
+            emptyDto.setTaxId("");
+            emptyDto.setPhone("");
+            emptyDto.setEmail("");
+            emptyDto.setWebsite("");
+            emptyDto.setContactPerson("");
+            if ("PROVEEDOR".equals(user.getRole())) {
+                emptyDto.setProviderType(user.getProviderType() != null ?
+                        user.getProviderType().name() : "");
+            }
+            return emptyDto;
         }
 
         return convertCompanyEntityToDto(companyEntity);

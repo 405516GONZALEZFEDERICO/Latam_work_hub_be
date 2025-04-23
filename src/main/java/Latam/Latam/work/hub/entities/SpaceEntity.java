@@ -40,8 +40,8 @@ public class SpaceEntity {
     private Double pricePerMonth;
     private Boolean active;
     private Boolean available;
-    @Column(name = "url_img")
-    private String urlImg;
+    
+
     @ManyToMany
     @JoinTable(
             name = "ESPACIO_x_SERVICIO",
@@ -49,6 +49,9 @@ public class SpaceEntity {
             inverseJoinColumns = @JoinColumn(name = "amenity_id")
     )
     private List<AmenityEntity> amenities;
+    public void addAmenity(AmenityEntity amenity) {
+        this.amenities.add(amenity);
+    }
 
     @ManyToOne
     @JoinColumn(name = "user_id")

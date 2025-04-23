@@ -39,7 +39,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/location/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/company/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/payments/*").hasAnyRole("CLIENTE", "PROVEEDOR")
-
+                        .requestMatchers("/api/spaces").hasAnyRole("CLIENTE", "PROVEEDOR")
+                        .requestMatchers("/api/spaces/*").hasAnyRole("CLIENTE", "PROVEEDOR")
+                        .requestMatchers("/api/amenities/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(firebaseAuthFilter, UsernamePasswordAuthenticationFilter.class);

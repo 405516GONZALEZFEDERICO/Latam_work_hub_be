@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface SpaceTypeRepository extends JpaRepository<SpaceTypeEntity, Long> {
+    SpaceTypeEntity findByName(String name);
 }

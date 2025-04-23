@@ -211,3 +211,30 @@ INSERT INTO CIUDADES (name, division_name, division_type, country_id) VALUES
                                                                           ('Valencia', 'Carabobo', 'STATE', 19),
                                                                           ('Barquisimeto', 'Lara', 'STATE', 19),
                                                                           ('Maracay', 'Aragua', 'STATE', 19);
+
+
+
+
+INSERT INTO TIPOS_ESPACIO (name) VALUES
+                                     ('Oficina privada'),
+                                     ('Espacio compartido'),
+                                     ('Sala de reuniones'),
+                                     ('Puesto flexible'),
+                                     ('Auditorio'),
+                                     ('Espacio al aire libre'),
+                                     ('Sala de capacitación'),
+                                     ('Coworking'),
+                                     ('Cafetería'),
+                                     ('Laboratorio');
+
+
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (100.0, 'Café ilimitado', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (200.0, 'Sala de reuniones', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (150.0, 'Espacio de coworking', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (50.0, 'Impresiones ilimitadas', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (0.0, 'Wifi de alta velocidad', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (300.0, 'Oficina privada', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (80.0, 'Casillero personal', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (120.0, 'Acceso 24/7', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (60.0, 'Estacionamiento', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (90.0, 'Guardería de mascotas', 1);

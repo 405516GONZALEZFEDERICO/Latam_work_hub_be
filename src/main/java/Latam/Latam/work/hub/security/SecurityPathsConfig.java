@@ -7,6 +7,8 @@ import java.util.List;
 
 @Component
 public class SecurityPathsConfig {
+
+
     public static final List<String> PUBLIC_PATHS = Arrays.asList(
             "/api/auth/login",
             "/api/auth/register",
@@ -19,7 +21,7 @@ public class SecurityPathsConfig {
     );
 
     public boolean isPublicPath(String path) {
-            return PUBLIC_PATHS.stream().anyMatch(pattern -> {
+                return PUBLIC_PATHS.stream().anyMatch(pattern -> {
             if (pattern.endsWith("/**")) {
                 String basePath = pattern.substring(0, pattern.length() - 3);
                 return path.startsWith(basePath);

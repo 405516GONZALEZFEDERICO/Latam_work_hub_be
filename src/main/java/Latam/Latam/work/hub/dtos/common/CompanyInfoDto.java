@@ -18,5 +18,5 @@ public class CompanyInfoDto {
     private String website;
     private String contactPerson;
     private Integer country;
-    private String ProviderType;
+    private String providerType;
 }

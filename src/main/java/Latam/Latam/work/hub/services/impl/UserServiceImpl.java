@@ -70,10 +70,23 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public CompleteUserDataDto getPersonalDataUser(String uid) {
-        UserEntity user=this.userRepository.findByFirebaseUid(uid).orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        return modelMapperConfig.modelMapper().map(user,CompleteUserDataDto.class);
+        try {
+            UserEntity user = this.userRepository.findByFirebaseUid(uid)
+                    .orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+            return modelMapperConfig.modelMapper().map(user, CompleteUserDataDto.class);
+        } catch (EntityNotFoundException e) {
+            CompleteUserDataDto emptyDto = new CompleteUserDataDto();
+            emptyDto.setName("");
+            emptyDto.setEmail("");
+            emptyDto.setPhotoUrl("");
+            emptyDto.setBirthDate(null);
+            emptyDto.setDepartment("");
+            emptyDto.setDocumentNumber("");
+            emptyDto.setJobTitle("");
+            emptyDto.setDocumentType(null);
+            return emptyDto;
+        }
     }
-
 
 
     @Override
@@ -132,6 +145,13 @@ public class UserServiceImpl implements UserService {
 
         log.info("Imagen de perfil actualizada correctamente para el usuario {}", user.getEmail());
         return true;
+    }
+
+
+
+    @Override
+    public UserEntity getUserByUid(String uid) {
+        return userRepository.findByFirebaseUid(uid).orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
     }
 
 

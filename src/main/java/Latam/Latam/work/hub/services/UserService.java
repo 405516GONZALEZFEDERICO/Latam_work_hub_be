@@ -16,5 +16,5 @@ public interface UserService {
     PersonalDataUserDto createOrUpdatePersonalDataUser(PersonalDataUserDto personalDataUserDto,String uid);
     UserEntity updateUserLoginData(UserEntity user);
     boolean uploadImagenProfile(String uid, MultipartFile image) throws IOException;
-
+    UserEntity getUserByUid(String uid);
 }

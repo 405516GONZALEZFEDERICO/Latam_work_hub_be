@@ -106,7 +106,14 @@ public class UserController {
     @GetMapping("/{uid}/get-personal-data")
     @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR')")
     public ResponseEntity<CompleteUserDataDto> getPersonalData(@PathVariable String uid) {
-        return ResponseEntity.ok(this.userService.getPersonalDataUser(uid));
+        try {
+            CompleteUserDataDto userData = this.userService.getPersonalDataUser(uid);
+            return ResponseEntity.ok(userData);
+        } catch (Exception e) {
+            log.error("Error al obtener datos personales del usuario: {}", e.getMessage());
+            CompleteUserDataDto emptyDto = new CompleteUserDataDto();
+            return ResponseEntity.ok(emptyDto);
+        }
     }
 
 }
