@@ -17,4 +17,5 @@ public interface UserService {
     UserEntity updateUserLoginData(UserEntity user);
     boolean uploadImagenProfile(String uid, MultipartFile image) throws IOException;
     UserEntity getUserByUid(String uid);
+    boolean desactivateAccount(String uid);
 }

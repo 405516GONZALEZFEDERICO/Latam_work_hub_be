@@ -1,24 +1,36 @@
 package Latam.Latam.work.hub.controllers;
 
+import Latam.Latam.work.hub.dtos.common.FiltersSpaceDto;
 import Latam.Latam.work.hub.dtos.common.SpaceDto;
+
+import Latam.Latam.work.hub.dtos.common.SpaceResponseDto;
+import Latam.Latam.work.hub.entities.SpaceEntity;
 import Latam.Latam.work.hub.services.SpaceService;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/spaces")
 @RequiredArgsConstructor
 public class SpaceControlller {
     private final SpaceService spaceService;
+
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('CLIENTE') || hasRole('PROVEEDOR')")
@@ -28,5 +40,35 @@ public class SpaceControlller {
     ) throws Exception {
         return ResponseEntity.ok(spaceService.createSpace(spaceDto, images));
     }
-    
+
+@GetMapping("/search")
+public ResponseEntity<Page<SpaceResponseDto>> getActiveAvailableSpaces(
+        @RequestParam(required = false) Double pricePerHour,
+        @RequestParam(required = false) Double pricePerDay,
+        @RequestParam(required = false) Double pricePerMonth,
+        @RequestParam(required = false) Double area,
+        @RequestParam(required = false) Integer capacity,
+        @RequestParam(required = false) Long spaceTypeId,
+        @RequestParam(required = false) Long cityId,
+        @RequestParam(required = false) Long countryId,
+        @RequestParam(required = false) List<Long> amenityIds,
+        @PageableDefault(size = 10) Pageable pageable) {
+
+    FiltersSpaceDto filters = FiltersSpaceDto.builder()
+            .pricePerHour(pricePerHour)
+            .pricePerDay(pricePerDay)
+            .pricePerMonth(pricePerMonth)
+            .area(area)
+            .capacity(capacity)
+            .spaceTypeId(spaceTypeId)
+            .cityId(cityId)
+            .countryId(countryId)
+            .amenityIds(amenityIds)
+            .build();
+
+    return ResponseEntity.ok(spaceService.findSpacesFiltered(filters, pageable));
+}
+
+
+
 }

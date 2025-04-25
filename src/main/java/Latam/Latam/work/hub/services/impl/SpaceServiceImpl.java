@@ -1,7 +1,10 @@
 package Latam.Latam.work.hub.services.impl;
 
+import Latam.Latam.work.hub.configs.mapper.spaces.SpaceMapper;
 import Latam.Latam.work.hub.dtos.common.AmenityDto;
 import Latam.Latam.work.hub.dtos.common.SpaceDto;
+import Latam.Latam.work.hub.dtos.common.FiltersSpaceDto;
+import Latam.Latam.work.hub.dtos.common.SpaceResponseDto;
 import Latam.Latam.work.hub.entities.AddressEntity;
 import Latam.Latam.work.hub.entities.AmenityEntity;
 import Latam.Latam.work.hub.entities.ImageEntity;
@@ -16,6 +19,8 @@ import Latam.Latam.work.hub.services.UserService;
 import Latam.Latam.work.hub.services.cloudinary.CloudinaryService;  // Importar el servicio de Cloudinary
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,7 +38,8 @@ public class SpaceServiceImpl implements SpaceService {
     private final ModelMapper modelMapper;
     private final UserService userService;
     private final CloudinaryService cloudinaryService;  
-    private final ImageRepository imageRepository;  
+    private final ImageRepository imageRepository;
+    private final SpaceMapper spaceMapper;
 
     @Override
     public boolean createSpace(SpaceDto spaceDto, List<MultipartFile> images) throws Exception {
@@ -68,7 +74,7 @@ public class SpaceServiceImpl implements SpaceService {
             spaceRepository.save(spaceEntity);
     
             // 2. Subir las imágenes a Cloudinary y guardar las entidades
-            List<String> imageUrls = cloudinaryService.uploadImages(images);  // Usar el método 'uploadImages' para subir varias imágenes
+            List<String> imageUrls = cloudinaryService.uploadImages(images);
     
             for (String imageUrl : imageUrls) {
                 ImageEntity imageEntity = new ImageEntity();
@@ -82,30 +88,24 @@ public class SpaceServiceImpl implements SpaceService {
             throw new Exception("Error al crear el espacio", e);
         }
     }
-    
+
+
 
     @Override
-    public boolean updateSpace(SpaceDto spaceDto) {
-        throw new UnsupportedOperationException("Unimplemented method 'updateSpace'");
-    }
+    public Page<SpaceResponseDto> findSpacesFiltered(FiltersSpaceDto filters, Pageable pageable) {
+        Page<SpaceEntity> spacesPage = spaceRepository.findActiveAvailableSpacesWithoutAmenityFilters(
+                filters.getPricePerHour(),
+                filters.getPricePerDay(),
+                filters.getPricePerMonth(),
+                filters.getArea(),
+                filters.getCapacity(),
+                filters.getSpaceTypeId(),
+                filters.getCityId(),
+                filters.getCountryId(),
+                filters.getAmenityIds(),
+                pageable
+        );
 
-    @Override
-    public boolean deleteSpace(Long id) {
-        throw new UnsupportedOperationException("Unimplemented method 'deleteSpace'");
-    }
-
-    @Override
-    public SpaceDto getSpaceById(Long id) {
-        throw new UnsupportedOperationException("Unimplemented method 'getSpaceById'");
-    }
-
-    @Override
-    public List<SpaceDto> getAllSpaces() {
-        throw new UnsupportedOperationException("Unimplemented method 'getAllSpaces'");
-    }
-
-    @Override
-    public List<SpaceDto> getSpacesByUserUid(String uid) {
-        throw new UnsupportedOperationException("Unimplemented method 'getSpacesByUserUid'");
+        return spacesPage.map(spaceMapper::toDto);
     }
 }

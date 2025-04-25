@@ -1,6 +1,6 @@
 package Latam.Latam.work.hub.services.impl;
 
-import Latam.Latam.work.hub.configs.ModelMapperConfig;
+import Latam.Latam.work.hub.configs.mapper.ModelMapperConfig;
 import Latam.Latam.work.hub.dtos.common.CompleteUserDataDto;
 import Latam.Latam.work.hub.dtos.common.PersonalDataUserDto;
 import Latam.Latam.work.hub.entities.UserEntity;
@@ -152,6 +152,18 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserEntity getUserByUid(String uid) {
         return userRepository.findByFirebaseUid(uid).orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+    }
+
+    @Override
+    public boolean desactivateAccount(String uid) {
+        Optional<UserEntity> user=this.userRepository.findByFirebaseUid(uid);
+        if (user.isPresent()) {
+            UserEntity userEntity = user.get();
+            userEntity.setEnabled(false);
+            userRepository.save(userEntity);
+            return true;
+        }
+        return false;
     }
 
 

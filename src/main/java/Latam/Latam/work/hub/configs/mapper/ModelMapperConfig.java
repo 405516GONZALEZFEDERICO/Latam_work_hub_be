@@ -1,4 +1,4 @@
-package Latam.Latam.work.hub.configs;
+package Latam.Latam.work.hub.configs.mapper;
 
 import org.modelmapper.ModelMapper;
 import org.springframework.context.annotation.Bean;

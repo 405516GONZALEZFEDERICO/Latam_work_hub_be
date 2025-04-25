@@ -1,16 +1,15 @@
 package Latam.Latam.work.hub.dtos.common;
 
-import lombok.Builder;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
+import lombok.Builder;
 @Data
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor
-public class AmenityDto {
+@AllArgsConstructor
+public class AmenityFilterDto {
     private Long id;
     private String name;
-    private Double price;
+    private String description;
 }

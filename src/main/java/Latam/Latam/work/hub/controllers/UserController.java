@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -53,7 +54,24 @@ public class UserController {
     }
 
 
-
+    @PatchMapping("/desactivate-account/{uid}")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR')")
+    public ResponseEntity<?> desactivateAccount(@PathVariable String uid) {
+        try {
+            boolean result = userService.desactivateAccount(uid);
+            return ResponseEntity.ok(result);
+        } catch (EntityNotFoundException e) {
+            log.error("Error al desactivar cuenta: Usuario no encontrado - {}", uid);
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body("Usuario no encontrado");
+        } catch (Exception e) {
+            log.error("Error inesperado al desactivar la cuenta: {}", e.getMessage());
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error al desactivar la cuenta");
+        }
+    }
 
     @PostMapping("/{uid}/upload-img")
     @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR')")

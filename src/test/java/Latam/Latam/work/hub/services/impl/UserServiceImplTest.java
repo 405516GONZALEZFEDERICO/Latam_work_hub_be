@@ -1,6 +1,6 @@
 package Latam.Latam.work.hub.services.impl;
 
-import Latam.Latam.work.hub.configs.ModelMapperConfig;
+import Latam.Latam.work.hub.configs.mapper.ModelMapperConfig;
 import Latam.Latam.work.hub.dtos.common.PersonalDataUserDto;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.enums.DocumentType;

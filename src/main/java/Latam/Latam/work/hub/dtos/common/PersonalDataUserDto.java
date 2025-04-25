@@ -16,7 +16,6 @@ public class PersonalDataUserDto {
  private String name;
  private LocalDate birthDate;
  private String documentNumber;
- private String email;
  private DocumentType documentType;
  private String jobTitle;
  private String department;
