@@ -1,6 +1,7 @@
 package Latam.Latam.work.hub.entities;
-
 import Latam.Latam.work.hub.enums.BookingStatus;
+import Latam.Latam.work.hub.enums.BookingType;
+import Latam.Latam.work.hub.services.Billable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,8 +16,9 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Entity
 @Table(name = "RESERVAS")
@@ -24,19 +26,31 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class BookingEntity {
+public class BookingEntity implements Billable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "start_date")
-    private LocalDateTime startDateTime; 
+    private LocalDateTime startDate;
 
     @Column(name = "end_date")
-    private LocalDateTime endDateTime;
+    private LocalDateTime endDate;
+
+    @Column(name = "init_hour")
+    private LocalTime initHour;
+
+    @Column(name = "end_hour")
+    private LocalTime endHour;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "booking_type")
+    private BookingType bookingType;
 
     private Boolean active;
 
+    @Column(name = "counter_persons")
+    private Integer counterPersons;
 
     @Enumerated(EnumType.STRING)
     private BookingStatus status;         
@@ -50,6 +64,10 @@ public class BookingEntity {
 
     @ManyToOne
     @JoinColumn(name = "user_id")
-    private UserEntity user;              
+    private UserEntity user;
 
+    @Override
+    public Double getAmount() {
+        return this.getTotalAmount();
+    }
 }

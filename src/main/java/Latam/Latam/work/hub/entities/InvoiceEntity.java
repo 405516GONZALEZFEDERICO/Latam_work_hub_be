@@ -49,7 +49,6 @@ public class InvoiceEntity {
     @Enumerated(EnumType.STRING)
     private InvoiceStatus status;        
 
-  
     @OneToOne
     @JoinColumn(name = "booking_id")
     private BookingEntity booking;

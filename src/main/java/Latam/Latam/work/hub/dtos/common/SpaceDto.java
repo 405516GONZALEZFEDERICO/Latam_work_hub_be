@@ -1,13 +1,11 @@
 package Latam.Latam.work.hub.dtos.common;
 
-import Latam.Latam.work.hub.entities.AddressEntity;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
-
 @Data
 @Builder
 @AllArgsConstructor
@@ -23,5 +21,11 @@ public class SpaceDto {
     private String uid;
     private List<AmenityDto> amenities;
     private SpaceTypeDto type;
-    private AddressEntity address;
+    private Long cityId;
+    private Long countryId;
+    private String streetName;
+    private String streetNumber;
+    private String floor;
+    private String apartment;
+    private String postalCode;
 }

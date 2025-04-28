@@ -1,6 +1,4 @@
 package Latam.Latam.work.hub.repositories;
-
-import Latam.Latam.work.hub.dtos.common.FiltersSpaceDto;
 import Latam.Latam.work.hub.entities.SpaceEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -20,12 +18,12 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
             "LEFT JOIN c.country " +
             "LEFT JOIN s.amenities am " +
             "WHERE s.active = true AND s.available = true " +
-            "AND (:pricePerHour IS NULL OR s.pricePerHour = :pricePerHour) " +
-            "AND (:pricePerDay IS NULL OR s.pricePerDay = :pricePerDay) " +
-            "AND (:pricePerMonth IS NULL OR s.pricePerMonth = :pricePerMonth) " +
-            "AND (:area IS NULL OR s.area = :area) " +
-            "AND (:capacity IS NULL OR s.capacity = :capacity) " +
-            "AND (:spaceTypeId IS NULL OR t.id = :spaceTypeId) " +
+            "AND (:pricePerHour IS NULL OR s.pricePerHour <= :pricePerHour) " +
+            "AND (:pricePerDay IS NULL OR s.pricePerDay <= :pricePerDay) " +
+            "AND (:pricePerMonth IS NULL OR s.pricePerMonth <= :pricePerMonth) " +
+            "AND (:area IS NULL OR s.area <= :area) " +
+            "AND (:capacity IS NULL OR s.capacity <= :capacity) " +
+            "AND (:spaceTypeId IS NULL OR t.id <= :spaceTypeId) " +
             "AND (:cityId IS NULL OR c.id = :cityId) " +
             "AND (:countryId IS NULL OR c.country.id = :countryId) " +
             "AND (:amenityIds IS NULL OR " +

@@ -1,6 +1,7 @@
 package Latam.Latam.work.hub.entities;
 
 import Latam.Latam.work.hub.enums.ContractStatus;
+import Latam.Latam.work.hub.services.Billable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -24,7 +25,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
-public class RentalContractEntity {
+public class RentalContractEntity implements Billable {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -54,6 +55,11 @@ public class RentalContractEntity {
 
     @ManyToOne
     @JoinColumn(name = "user_id")
-    private UserEntity tenant ;              
+    private UserEntity tenant ;
 
+
+    @Override
+    public Double getAmount() {
+        return 0.0;
+    }
 }

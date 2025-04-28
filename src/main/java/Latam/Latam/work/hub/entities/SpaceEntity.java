@@ -16,6 +16,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 
@@ -64,6 +66,8 @@ public class SpaceEntity {
     @JoinColumn(name = "address_id")
     private AddressEntity address;
 
+    @Column(name = "created_date_time")
+    private LocalDateTime createdDateTime;
     @OneToMany(mappedBy = "space")
     private List<ImageEntity> images;
 

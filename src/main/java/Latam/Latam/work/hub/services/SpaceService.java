@@ -13,4 +13,5 @@ import org.springframework.data.domain.Pageable;
 public interface SpaceService {
 boolean createSpace(SpaceDto spaceDto,List<MultipartFile> images) throws Exception;
 Page<SpaceResponseDto>findSpacesFiltered(FiltersSpaceDto filters, Pageable pageable);
+SpaceResponseDto findSpaceById(Long id);
 }

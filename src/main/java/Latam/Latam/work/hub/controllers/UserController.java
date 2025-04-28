@@ -3,6 +3,7 @@ package Latam.Latam.work.hub.controllers;
 
 import Latam.Latam.work.hub.dtos.common.CompleteUserDataDto;
 import Latam.Latam.work.hub.dtos.common.PersonalDataUserDto;
+import Latam.Latam.work.hub.dtos.common.ProviderTypeDto;
 import Latam.Latam.work.hub.exceptions.AuthException;
 import Latam.Latam.work.hub.services.UserService;
 import com.google.firebase.auth.FirebaseAuth;
@@ -131,6 +132,19 @@ public class UserController {
             log.error("Error al obtener datos personales del usuario: {}", e.getMessage());
             CompleteUserDataDto emptyDto = new CompleteUserDataDto();
             return ResponseEntity.ok(emptyDto);
+        }
+    }
+
+    @GetMapping("/{uid}/get-provider-type")
+    @PreAuthorize("hasAnyRole('PROVEEDOR')")
+    public ResponseEntity<ProviderTypeDto> getProviderType(@PathVariable String uid) {
+        try {
+            ProviderTypeDto userData = this.userService.getProviderType(uid);
+            return ResponseEntity.ok(userData);
+        } catch (Exception e) {
+            log.error("Error al obtener el tipo de   usuario del proveedor: {}", e.getMessage());
+            ProviderTypeDto providerTypeDto = new ProviderTypeDto();
+            return ResponseEntity.ok(providerTypeDto);
         }
     }
 

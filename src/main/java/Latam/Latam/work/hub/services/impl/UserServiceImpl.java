@@ -3,6 +3,7 @@ package Latam.Latam.work.hub.services.impl;
 import Latam.Latam.work.hub.configs.mapper.ModelMapperConfig;
 import Latam.Latam.work.hub.dtos.common.CompleteUserDataDto;
 import Latam.Latam.work.hub.dtos.common.PersonalDataUserDto;
+import Latam.Latam.work.hub.dtos.common.ProviderTypeDto;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.exceptions.AuthException;
 import Latam.Latam.work.hub.repositories.UserRepository;
@@ -164,6 +165,14 @@ public class UserServiceImpl implements UserService {
             return true;
         }
         return false;
+    }
+
+    @Override
+    public ProviderTypeDto getProviderType(String uid) {
+        UserEntity userEntity=this.userRepository.findByFirebaseUid(uid).orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        ProviderTypeDto providerTypeDto = new ProviderTypeDto();
+        providerTypeDto.setProviderType(String.valueOf(userEntity.getProviderType()));
+        return  providerTypeDto;
     }
 
 

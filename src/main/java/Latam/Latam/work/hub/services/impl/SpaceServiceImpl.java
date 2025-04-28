@@ -1,6 +1,9 @@
 package Latam.Latam.work.hub.services.impl;
 
+import Latam.Latam.work.hub.configs.AddressConverter;
+import Latam.Latam.work.hub.configs.mapper.spaces.AddressMapper;
 import Latam.Latam.work.hub.configs.mapper.spaces.SpaceMapper;
+import Latam.Latam.work.hub.dtos.common.AddressDtoV2;
 import Latam.Latam.work.hub.dtos.common.AmenityDto;
 import Latam.Latam.work.hub.dtos.common.SpaceDto;
 import Latam.Latam.work.hub.dtos.common.FiltersSpaceDto;
@@ -24,6 +27,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,57 +43,76 @@ public class SpaceServiceImpl implements SpaceService {
     private final UserService userService;
     private final CloudinaryService cloudinaryService;  
     private final ImageRepository imageRepository;
+    private final AddressConverter addressConverter;
     private final SpaceMapper spaceMapper;
-
     @Override
     public boolean createSpace(SpaceDto spaceDto, List<MultipartFile> images) throws Exception {
         try {
-            // 1. Crear y guardar el SpaceEntity
-            SpaceEntity spaceEntity = modelMapper.map(spaceDto, SpaceEntity.class);
+            SpaceEntity spaceEntity = new SpaceEntity();
 
-
+            // Map basic properties
+            spaceEntity.setName(spaceDto.getName());
+            spaceEntity.setDescription(spaceDto.getDescription());
+            spaceEntity.setCapacity(spaceDto.getCapacity());
+            spaceEntity.setArea(spaceDto.getArea());
+            spaceEntity.setPricePerHour(spaceDto.getPricePerHour());
+            spaceEntity.setPricePerDay(spaceDto.getPricePerDay());
+            spaceEntity.setPricePerMonth(spaceDto.getPricePerMonth());
 
             spaceEntity.setOwner(userService.getUserByUid(spaceDto.getUid()));
             spaceEntity.setActive(true);
             spaceEntity.setAvailable(true);
-    
+            spaceEntity.setCreatedDateTime(LocalDateTime.now());
+
             spaceEntity.setType(spaceTypeRepository.findByName(spaceDto.getType().getName()));
-            AddressEntity addressEntity = modelMapper.map(spaceDto.getAddress(), AddressEntity.class);
+            if (spaceEntity.getType() == null) {
+                throw new Exception("Tipo de espacio no encontrado");
+            }
+
+            // Convertir y guardar la dirección
+            AddressEntity addressEntity = addressConverter.convertToAddressEntity(spaceDto);
             addressRepository.save(addressEntity);
             spaceEntity.setAddress(addressEntity);
-    
+
+            // Save address first to get ID
+            addressRepository.save(addressEntity);
+            spaceEntity.setAddress(addressEntity);
+
+            // Handle amenities
             if (spaceDto.getAmenities() != null) {
                 List<AmenityEntity> savedAmenities = new ArrayList<>();
                 for (AmenityDto amenityDto : spaceDto.getAmenities()) {
                     AmenityEntity amenityEntity = amenityRepository.findByName(amenityDto.getName());
                     if (amenityEntity == null) {
-                        amenityEntity = modelMapper.map(amenityDto, AmenityEntity.class);
+                        // Create new amenity if it doesn't exist
+                        amenityEntity = new AmenityEntity();
+                        amenityEntity.setName(amenityDto.getName());
+                        amenityEntity.setPrice(amenityDto.getPrice());
                         amenityEntity = amenityRepository.save(amenityEntity);
                     }
                     savedAmenities.add(amenityEntity);
                 }
                 spaceEntity.setAmenities(savedAmenities);
             }
-    
+
+            // Save the space entity
             spaceRepository.save(spaceEntity);
-    
-            // 2. Subir las imágenes a Cloudinary y guardar las entidades
+
+            // 2. Upload and save images
             List<String> imageUrls = cloudinaryService.uploadImages(images);
-    
+
             for (String imageUrl : imageUrls) {
                 ImageEntity imageEntity = new ImageEntity();
                 imageEntity.setUrl(imageUrl);
                 imageEntity.setSpace(spaceEntity);
                 imageRepository.save(imageEntity);
             }
-    
+
             return true;
         } catch (Exception e) {
             throw new Exception("Error al crear el espacio", e);
         }
     }
-
-
 
     @Override
     public Page<SpaceResponseDto> findSpacesFiltered(FiltersSpaceDto filters, Pageable pageable) {
@@ -107,5 +130,10 @@ public class SpaceServiceImpl implements SpaceService {
         );
 
         return spacesPage.map(spaceMapper::toDto);
+    }
+
+    @Override
+    public SpaceResponseDto findSpaceById(Long id) {
+        return this.spaceRepository.findById(id).map(spaceMapper::toDto).orElse(null);
     }
 }
