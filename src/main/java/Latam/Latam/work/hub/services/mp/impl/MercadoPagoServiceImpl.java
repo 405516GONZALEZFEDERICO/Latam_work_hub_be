@@ -1,21 +1,33 @@
 package Latam.Latam.work.hub.services.mp.impl;
+import Latam.Latam.work.hub.entities.InvoiceEntity;
+import Latam.Latam.work.hub.entities.UserEntity;
+import Latam.Latam.work.hub.services.MailService;
+import com.mercadopago.client.merchantorder.MerchantOrderClient;
 
 import Latam.Latam.work.hub.enums.InvoiceStatus;
 import Latam.Latam.work.hub.repositories.InvoiceRepository;
 import Latam.Latam.work.hub.services.mp.MercadoPagoService;
+import com.mercadopago.MercadoPagoConfig;
+import com.mercadopago.client.payment.PaymentClient;
+import com.mercadopago.client.payment.PaymentRefundClient;
 import com.mercadopago.client.preference.*;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
+import com.mercadopago.resources.merchantorder.MerchantOrder;
+import com.mercadopago.resources.merchantorder.MerchantOrderPayment;
 import com.mercadopago.resources.preference.Preference;
+import jakarta.annotation.PostConstruct;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import javax.swing.text.DateFormatter;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,28 +37,37 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MercadoPagoServiceImpl implements MercadoPagoService {
 
-    private static final Logger logger = LoggerFactory.getLogger(MercadoPagoServiceImpl.class);
+    private static final String CURRENCY = "ARS";
 
-    @Value("${mercadopago.admin.fee.percentage}")
-    private int adminFeePercentage;
+    @Value("${front.url}")
+    private String WEB_URL;
 
-    @Value("${mercadopago.success.url}")
-    private String successUrl;
+    @Value("${back.url}")
+    private String BACK_URL;
 
-    @Value("${mercadopago.failure.url}")
-    private String failureUrl;
-
-    @Value("${mercadopago.pending.url}")
-    private String pendingUrl;
+    @Value("${mercadopago.access.token}")
+    private String MP_TOKEN;
 
     private final InvoiceRepository invoiceRepository;
+
+    private final MerchantOrderClient merchantOrderClient;
+
+    private final PreferenceClient preferenceClient;
+
+    private final PaymentRefundClient paymentRefundClient;
+
+    private final MailService mailService;
+
+    @PostConstruct
+    public void init() {
+        MercadoPagoConfig.setAccessToken(MP_TOKEN);
+    }
+
     @Transactional
     public String createInvoicePaymentPreference(Long invoiceId, String title, BigDecimal amount,
                                                  String buyerEmail, String sellerEmail) throws MPException, MPApiException {
-        logger.info("Creando preferencia de pago para factura ID: {}", invoiceId);
-
         try {
-            PreferenceClient client = new PreferenceClient();
+
 
             // Crear ítem para la factura
             List<PreferenceItemRequest> items = new ArrayList<>();
@@ -54,13 +75,9 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                     .title(title)
                     .quantity(1)
                     .unitPrice(amount)
+                    .currencyId(CURRENCY)
                     .build();
             items.add(item);
-
-            // Calcular la comisión del admin
-            BigDecimal adminFee = amount
-                    .multiply(BigDecimal.valueOf(adminFeePercentage))
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
             // Usar cuentas de prueba
             String buyerEmailTest = "test_user_153291871@testuser.com";
@@ -76,27 +93,30 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
             metadata.put("invoice_id", invoiceId);
             metadata.put("buyer_email", buyerEmailTest);
             metadata.put("seller_email", sellerEmailTest);
-            metadata.put("admin_fee", adminFee);
 
-            // IMPORTANTE: Agregar las URLs de retorno
+//             Configurar URLs de retorno
             PreferenceBackUrlsRequest backUrls = PreferenceBackUrlsRequest.builder()
-                    .success(successUrl)
-                    .failure(failureUrl)
-                    .pending(pendingUrl)
+                    .success(WEB_URL + "/home/reservas")
+                    .failure(WEB_URL + "/home/reservas")    // URL para pagos fallidos
+                    .pending(WEB_URL + "/home/reservas")    // URL para pagos pendientes
                     .build();
 
-            // Crear la preferencia CON URLs de retorno
+            // URL de notificación
+            String notificationUrl = BACK_URL + "/api/payments/notifications/" + invoiceId;
+
+            // Crear la preferencia
             PreferenceRequest preferenceRequest = PreferenceRequest.builder()
                     .items(items)
                     .payer(payer)
+                    .backUrls(backUrls)
+                    .notificationUrl(notificationUrl)
                     .externalReference("INVOICE-" + invoiceId)
                     .metadata(metadata)
-//                    .backUrls(backUrls)
-//                    .autoReturn("approved")
+                    .autoReturn("all")
                     .build();
 
             // Crear la preferencia
-            Preference preference = client.create(preferenceRequest);
+            Preference preference = preferenceClient.create(preferenceRequest);
 
             // Actualizar estado a ISSUED
             invoiceRepository.findById(invoiceId).ifPresent(invoice -> {
@@ -104,12 +124,37 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                 invoiceRepository.save(invoice);
             });
 
-            logger.info("Preferencia creada con ID: {}", preference.getId());
             return preference.getInitPoint();
         } catch (MPException | MPApiException e) {
-            logger.error("Error creando preferencia de pago para factura ID: " + invoiceId, e);
             throw e;
         }
     }
 
+    @Override
+    public String receiveNotification(String topic, String resource, Long invoiceId) throws MPException, MPApiException {
+        if ("merchant_order".equalsIgnoreCase(topic) && resource != null) {
+            String[] resourceParts = resource.split("/");
+            Long merchantOrderId = Long.valueOf(resourceParts[resourceParts.length - 1]);
+            MerchantOrder merchantOrder = this.merchantOrderClient.get(merchantOrderId);
+
+            if ("paid".equalsIgnoreCase(merchantOrder.getOrderStatus())) {
+                InvoiceEntity invoiceEntity = this.invoiceRepository.findById(invoiceId)
+                        .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
+                invoiceEntity.setStatus(InvoiceStatus.PAID);
+                this.invoiceRepository.save(invoiceEntity);
+
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+                String formattedDate = invoiceEntity.getIssueDate().format(formatter);
+
+                this.mailService.sendPaymentConfirmationEmail(
+                        invoiceEntity.getBooking().getUser().getEmail(),
+                        invoiceEntity.getBooking().getUser().getName(),
+                        invoiceEntity.getBooking().getSpace().getName(),
+                        formattedDate,
+                        invoiceEntity.getTotalAmount());
+            }
+        }
+
+        return "Notification Recibida";
+    }
 }

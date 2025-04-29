@@ -1,6 +1,9 @@
 package Latam.Latam.work.hub.configs;
 
 import com.mercadopago.MercadoPagoConfig;
+import com.mercadopago.client.merchantorder.MerchantOrderClient;
+import com.mercadopago.client.payment.PaymentRefundClient;
+import com.mercadopago.client.preference.PreferenceClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,4 +18,22 @@ public class MercadoPagoConfiguration {
         MercadoPagoConfig.setAccessToken(accessToken);
         return "MercadoPago configured with access token";
     }
+
+
+    @Bean
+    public PreferenceClient preferenceClient() {
+        return new PreferenceClient();
+    }
+
+    @Bean
+    public MerchantOrderClient merchantOrderClient() {
+        return new MerchantOrderClient();
+    }
+
+    @Bean
+    public PaymentRefundClient paymentRefundClient() {
+        return new PaymentRefundClient();
+    }
+
+
 }

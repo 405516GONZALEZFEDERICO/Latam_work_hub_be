@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/payments/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/spaces").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/spaces/*").hasAnyRole("CLIENTE", "PROVEEDOR")
+                        .requestMatchers("api/spaces/provider/spaces").hasRole("PROVEEDOR")
                         .requestMatchers("/api/amenities/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .anyRequest().authenticated()
                 )

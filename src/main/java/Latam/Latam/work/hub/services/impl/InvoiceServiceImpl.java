@@ -49,6 +49,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         // Configurar campos comunes
         invoiceEntity.setInvoiceNumber(generateInvoiceNumber());
         invoiceEntity.setIssueDate(LocalDateTime.now());
+        invoiceEntity.setDueDate(LocalDateTime.now().plusDays(30));
         invoiceEntity.setTotalAmount(entity.getAmount());
         invoiceEntity.setStatus(InvoiceStatus.DRAFT);
 

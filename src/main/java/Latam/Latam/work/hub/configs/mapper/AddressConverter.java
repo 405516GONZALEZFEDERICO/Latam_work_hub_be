@@ -1,4 +1,4 @@
-package Latam.Latam.work.hub.configs;
+package Latam.Latam.work.hub.configs.mapper;
 import Latam.Latam.work.hub.dtos.common.SpaceDto;
 import Latam.Latam.work.hub.entities.AddressEntity;
 import Latam.Latam.work.hub.entities.CityEntity;

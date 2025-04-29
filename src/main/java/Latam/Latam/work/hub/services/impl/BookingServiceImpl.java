@@ -2,6 +2,7 @@ package Latam.Latam.work.hub.services.impl;
 
 import Latam.Latam.work.hub.dtos.common.BookingDto;
 import Latam.Latam.work.hub.entities.BookingEntity;
+import Latam.Latam.work.hub.entities.SpaceEntity;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.enums.BookingType;
 import Latam.Latam.work.hub.repositories.BookingRepository;
@@ -31,6 +32,7 @@ public class BookingServiceImpl implements BookingService {
             var space = spaceRepository.findById(bookingDto.getSpaceId())
                     .orElseThrow(() -> new RuntimeException("Espacio no encontrado"));
 
+
             var user = userRepository.findByFirebaseUid(bookingDto.getUid())
                     .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
@@ -49,8 +51,10 @@ public class BookingServiceImpl implements BookingService {
             // Determinar tipo de reserva
             bookingEntity.setBookingType(determineBookingType(bookingDto));
 
-            // Guardar y crear factura
             var savedBooking = bookingRepository.saveAndFlush(bookingEntity);
+            SpaceEntity spaceEntity=space;
+            spaceEntity.setAvailable(false);
+            this.spaceRepository.save(spaceEntity);
             return invoiceService.createInvoice(savedBooking);
 
         } catch (Exception e) {

@@ -43,7 +43,8 @@ public class SpaceEntity {
     private Double pricePerMonth;
     private Boolean active;
     private Boolean available;
-    
+    @Column(name = "updated_date_time")
+    private LocalDateTime updatedDateTime;
 
     @ManyToMany
     @JoinTable(

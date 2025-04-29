@@ -9,4 +9,6 @@ public interface MercadoPagoService {
     String createInvoicePaymentPreference(Long invoiceId, String title, BigDecimal amount,
                                           String buyerEmail, String sellerEmail) throws MPException, MPApiException;
 
+    String receiveNotification(String topic, String resource, Long userId) throws MPException, MPApiException;
+
 }

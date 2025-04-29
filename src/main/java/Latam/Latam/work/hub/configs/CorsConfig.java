@@ -19,7 +19,8 @@ public class CorsConfig implements WebMvcConfigurer {
                         "http://localhost:8080",
                         "http://localhost:8081",
                         "http://localhost:3306",
-                        "http://127.0.0.1:5500"
+                        "http://127.0.0.1:5500",
+                        "https://latam-workhub.netlify.app/"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "CONNECT")
                 .allowedHeaders("*")
@@ -38,6 +39,7 @@ public class CorsConfig implements WebMvcConfigurer {
         config.addAllowedOrigin("http://localhost:8081");
         config.addAllowedOrigin("http://localhost:3306");
         config.addAllowedOrigin("http://127.0.0.1:5500");
+        config.addAllowedOrigin("https://latam-workhub.netlify.app/");
         config.addAllowedHeader("*");
         config.addAllowedMethod("*");
         source.registerCorsConfiguration("/**", config);

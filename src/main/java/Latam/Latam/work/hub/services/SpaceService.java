@@ -12,6 +12,9 @@ import org.springframework.data.domain.Pageable;
 @Service
 public interface SpaceService {
 boolean createSpace(SpaceDto spaceDto,List<MultipartFile> images) throws Exception;
+boolean updateSpace(Long spaceId, SpaceDto spaceDto, List<MultipartFile> images) throws Exception;
 Page<SpaceResponseDto>findSpacesFiltered(FiltersSpaceDto filters, Pageable pageable);
 SpaceResponseDto findSpaceById(Long id);
+    Page<SpaceResponseDto> findSpacesByOwnerUid(String uid, FiltersSpaceDto filters, Pageable pageable);
+
 }
