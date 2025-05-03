@@ -17,6 +17,7 @@ public class ImageEntity {
     @Column(name = "url")
     private String url;
 
+
     @ManyToOne
     @JoinColumn(name = "space_id")
     private SpaceEntity space;

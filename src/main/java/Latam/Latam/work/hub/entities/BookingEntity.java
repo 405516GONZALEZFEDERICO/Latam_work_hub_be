@@ -16,7 +16,6 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
@@ -47,13 +46,15 @@ public class BookingEntity implements Billable {
     @Column(name = "booking_type")
     private BookingType bookingType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private BookingStatus status;
+
     private Boolean active;
 
     @Column(name = "counter_persons")
     private Integer counterPersons;
 
-    @Enumerated(EnumType.STRING)
-    private BookingStatus status;         
 
     @Column(name = "total_amount")
     private Double totalAmount;           

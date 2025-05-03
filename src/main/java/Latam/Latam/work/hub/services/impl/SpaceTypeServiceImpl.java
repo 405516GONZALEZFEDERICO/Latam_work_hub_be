@@ -21,6 +21,7 @@ public class SpaceTypeServiceImpl implements SpaceTypeService {
         if (spaceTypes != null && !spaceTypes.isEmpty()) {
             for (SpaceTypeEntity spaceType : spaceTypes) {
                 SpaceTypeDto spaceTypeDto = new SpaceTypeDto();
+                spaceTypeDto.setId(spaceType.getId());
                 spaceTypeDto.setName(spaceType.getName());
                 spaceTypeDtos.add(spaceTypeDto);
             }

@@ -4,7 +4,6 @@ import Latam.Latam.work.hub.dtos.common.FiltersSpaceDto;
 import Latam.Latam.work.hub.dtos.common.SpaceDto;
 
 import Latam.Latam.work.hub.dtos.common.SpaceResponseDto;
-import Latam.Latam.work.hub.entities.SpaceEntity;
 import Latam.Latam.work.hub.services.SpaceService;
 import lombok.RequiredArgsConstructor;
 
@@ -26,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/spaces")

@@ -5,6 +5,7 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -70,5 +71,59 @@ public class MailServiceImpl  implements MailService {
         } catch (MessagingException e) {
             throw new RuntimeException("Error al enviar correo: " + e.getMessage(), e);
         }
+    }
+
+
+    @Override
+    public void sendBookingNotificationToOwner(String ownerEmail, String ownerName, String spaceName, String userName, String startDate, String endDate, String startTime, String endTime) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(ownerEmail);
+        message.setSubject("Nueva reserva en tu espacio - WorkHub");
+
+        StringBuilder body = new StringBuilder();
+        body.append(String.format("Hola %s,\n\n", ownerName));
+        body.append(String.format("Te informamos que tu espacio '%s' ha sido reservado por %s.\n\n", spaceName, userName));
+        body.append("Detalles de la reserva:\n");
+
+        if (!startDate.isEmpty()) {
+            body.append(String.format("- Fecha de inicio: %s\n", startDate));
+        }
+
+        if (!endDate.isEmpty()) {
+            body.append(String.format("- Fecha de finalización: %s\n", endDate));
+        }
+
+        if (!startTime.isEmpty()) {
+            body.append(String.format("- Hora de inicio: %s\n", startTime));
+        }
+
+        if (!endTime.isEmpty()) {
+            body.append(String.format("- Hora de finalización: %s\n", endTime));
+        }
+
+        body.append("\nPuedes ver más detalles en tu cuenta de WorkHub.\n\n");
+        body.append("Saludos,\nEl equipo de WorkHub");
+
+        message.setText(body.toString());
+        mailSender.send(message);
+    }
+
+    @Override
+    public void sendBookingCompletedEmail(String userEmail, String userName, String spaceName) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(userEmail);
+        message.setSubject("Tu reserva ha finalizado - WorkHub");
+
+        String body = String.format(
+                "Hola %s,\n\n" +
+                        "Tu reserva del espacio '%s' ha finalizado. Esperamos que hayas tenido una gran experiencia.\n\n" +
+                        "¡Gracias por usar WorkHub!\n\n" +
+                        "Saludos,\n" +
+                        "El equipo de WorkHub",
+                userName, spaceName
+        );
+
+        message.setText(body);
+        mailSender.send(message);
     }
 }

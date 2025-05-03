@@ -17,7 +17,8 @@ public class SecurityPathsConfig {
             "/api/auth/recuperar-contrasenia",
             "/api/public/**",
             "/swagger-ui/**",
-            "/v3/api-docs/**"
+            "/v3/api-docs/**",
+            "/api/payments/notifications/**"
     );
 
     public boolean isPublicPath(String path) {
