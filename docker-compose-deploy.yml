@@ -1,0 +1,14 @@
+services:
+  app:
+    container_name: latam-workhub-be
+    build:
+        context: .
+        dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ep-proud-pond-a40kf8tv-pooler.us-east-1.aws.neon.tech:5432/latam_workhub_db?sslmode=require
+      SPRING_DATASOURCE_USERNAME: latam_workhub_db_owner
+      SPRING_DATASOURCE_PASSWORD: npg_bdMXqjgv4a1l
+    ports:
+      - "8080:8080"
+

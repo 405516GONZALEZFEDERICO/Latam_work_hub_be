@@ -11,4 +11,5 @@ public interface MercadoPagoService {
 
     String receiveNotification(String topic, String resource, Long userId) throws MPException, MPApiException;
 
+    boolean refundPayment(Long invoiceId) throws MPException, MPApiException;
 }

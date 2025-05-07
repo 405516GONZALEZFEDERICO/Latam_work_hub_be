@@ -2,6 +2,8 @@ package Latam.Latam.work.hub.repositories;
 
 import Latam.Latam.work.hub.entities.BookingEntity;
 import Latam.Latam.work.hub.enums.BookingStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -56,4 +58,12 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
             "AND ((b.endDate IS NOT NULL AND b.endDate < :now) " +
             "     OR (b.endDate IS NULL AND b.startDate < :now AND b.bookingType = 'PER_DAY'))")
     List<BookingEntity> findExpiredBookings(@Param("now") LocalDateTime now);
+
+
+    @Query("SELECT b FROM BookingEntity b WHERE b.user.firebaseUid = :uid " +
+            "AND (:status IS NULL OR b.status = :status)")
+    Page<BookingEntity> findByUserFirebaseUidAndStatus(
+            @Param("uid") String uid,
+            @Param("status") BookingStatus status,
+            Pageable pageable);
 }

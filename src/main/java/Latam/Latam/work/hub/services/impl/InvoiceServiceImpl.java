@@ -11,6 +11,7 @@ import Latam.Latam.work.hub.services.InvoiceService;
 import Latam.Latam.work.hub.services.mp.MercadoPagoService;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -64,6 +66,12 @@ public class InvoiceServiceImpl implements InvoiceService {
                 getBuyerEmail(entity),
                 getSellerEmail(entity)
         );
+    }
+
+    @Override
+    public InvoiceEntity findByBookingId(Long bookingId) {
+        Optional<InvoiceEntity> invoice = Optional.ofNullable(invoiceRepository.findByBookingId(bookingId).orElseThrow(() -> new EntityNotFoundException("Factura no encontrada")));
+        return invoice.orElseThrow(() -> new EntityNotFoundException("Factura no encontrada"));
     }
 
     private String generateInvoiceNumber() {

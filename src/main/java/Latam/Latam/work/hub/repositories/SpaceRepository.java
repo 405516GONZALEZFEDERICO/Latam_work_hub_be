@@ -18,6 +18,7 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
             "LEFT JOIN c.country " +
             "LEFT JOIN s.amenities am " +
             "WHERE s.active = true AND s.available = true " +
+            "AND s.deleted = false " +
             "AND (:pricePerHour IS NULL OR s.pricePerHour <= :pricePerHour) " +
             "AND (:pricePerDay IS NULL OR s.pricePerDay <= :pricePerDay) " +
             "AND (:pricePerMonth IS NULL OR s.pricePerMonth <= :pricePerMonth) " +
@@ -51,6 +52,7 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
             "LEFT JOIN c.country " +
             "LEFT JOIN s.amenities am " +
             "WHERE s.owner.firebaseUid = :uid " +
+            "AND s.deleted = false " +
             "AND (:pricePerHour IS NULL OR s.pricePerHour <= :pricePerHour) " +
             "AND (:pricePerDay IS NULL OR s.pricePerDay <= :pricePerDay) " +
             "AND (:pricePerMonth IS NULL OR s.pricePerMonth <= :pricePerMonth) " +
@@ -77,5 +79,6 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
             @Param("amenityIds") List<Long> amenityIds,
             Pageable pageable
     );
+
 
 }

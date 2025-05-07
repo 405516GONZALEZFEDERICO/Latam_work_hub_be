@@ -16,5 +16,6 @@ boolean updateSpace(Long spaceId, SpaceDto spaceDto, List<MultipartFile> images)
 Page<SpaceResponseDto>findSpacesFiltered(FiltersSpaceDto filters, Pageable pageable);
 SpaceResponseDto findSpaceById(Long id);
 Page<SpaceResponseDto> findSpacesByOwnerUid(String uid, FiltersSpaceDto filters, Pageable pageable);
+boolean deleteSpace(Long spaceId,String uid);
 
 }

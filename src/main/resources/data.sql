@@ -183,7 +183,8 @@ INSERT INTO CIUDADES (name, division_name, division_type, country_id) VALUES
                                                                           ('Trujillo', 'La Libertad', 'DEPARTMENT', 16),
                                                                           ('Chiclayo', 'Lambayeque', 'DEPARTMENT', 16),
                                                                           ('Cusco', 'Cusco', 'DEPARTMENT', 16),
-                                                                          ('Piura', 'Piura', 'DEPARTMENT', 16);
+                                                                          ('Piura', 'Piura', 'DEPARTMENT', 16),
+                                                                          ('Iquitos', 'Loreto', 'DEPARTMENT', 16);
 
 -- Ciudades de República Dominicana con provincias
 INSERT INTO CIUDADES (name, division_name, division_type, country_id) VALUES
@@ -225,7 +226,17 @@ INSERT INTO TIPOS_ESPACIO (name) VALUES
                                      ('Sala de capacitación'),
                                      ('Coworking'),
                                      ('Cafetería'),
-                                     ('Laboratorio');
+                                     ('Laboratorio'),
+                                     ('Estudio de grabación'),
+                                     ('Sala de fotografía'),
+                                     ('Espacio para eventos'),
+                                     ('Biblioteca'),
+                                     ('Cabina telefónica'),
+                                     ('Zona de descanso'),
+                                     ('Espacio wellness'),
+                                     ('Terraza con vista'),
+                                     ('Mini cine'),
+                                     ('Taller creativo');
 
 
 INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (100.0, 'Café ilimitado', 1);
@@ -238,3 +249,23 @@ INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (80.0, 'Casillero perso
 INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (120.0, 'Acceso 24/7', 1);
 INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (60.0, 'Estacionamiento', 1);
 INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (90.0, 'Guardería de mascotas', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (40.0, 'Sillas ergonómicas', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (70.0, 'Proyector', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (30.0, 'Pizarra blanca', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (0.0, 'Botellas de agua gratuitas', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (0.0, 'Iluminación natural', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (0.0, 'Cámaras de seguridad', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (0.0, 'Control de acceso', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (100.0, 'Recepción', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (50.0, 'Servicio de correo', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (25.0, 'Zona de snacks', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (0.0, 'Espacios pet-friendly', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (80.0, 'Lounge', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (60.0, 'Paneles acústicos', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (75.0, 'Aislamiento térmico', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (40.0, 'Estación de carga para dispositivos', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (20.0, 'Biblioteca colaborativa', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (90.0, 'Cabinas insonorizadas', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (60.0, 'Ducha', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (0.0, 'Espacio verde', 1);
+INSERT INTO SERVICIOS_EXTRA (price, name, active) VALUES (35.0, 'Áreas de networking', 1);

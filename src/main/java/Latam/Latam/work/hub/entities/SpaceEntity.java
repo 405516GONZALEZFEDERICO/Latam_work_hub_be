@@ -34,6 +34,7 @@ public class SpaceEntity {
     private String name;
     private String description;
     private Integer capacity;
+    private boolean deleted;
     private Double area;
     @Column(name = "price_per_hour")
     private Double pricePerHour;

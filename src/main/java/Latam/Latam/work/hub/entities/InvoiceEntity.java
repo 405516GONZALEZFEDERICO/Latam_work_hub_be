@@ -37,6 +37,8 @@ public class InvoiceEntity {
     @Enumerated(EnumType.STRING)
     private InvoiceType type;
 
+    private String  description;
+
     @Column(name = "issue_date")
     private LocalDateTime issueDate;
 
@@ -53,10 +55,18 @@ public class InvoiceEntity {
     @JoinColumn(name = "booking_id")
     private BookingEntity booking;
 
+    @Column(name = "payment_id")
+    private Long paymentId;
+
     @OneToOne
     @JoinColumn(name = "rental_contract_id")
     private RentalContractEntity rentalContract; 
 
+    @Column(name = "PAID_DATE")
+    private LocalDateTime paidDate;
+
+    @Column(name = "PAYMENT_URL")
+    private String paymentUrl;
 
 }
 

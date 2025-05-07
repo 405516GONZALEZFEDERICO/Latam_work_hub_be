@@ -1,15 +1,26 @@
 package Latam.Latam.work.hub.services.mp.impl;
-
+import Latam.Latam.work.hub.entities.BookingEntity;
 import Latam.Latam.work.hub.entities.InvoiceEntity;
+import Latam.Latam.work.hub.entities.RentalContractEntity;
+import Latam.Latam.work.hub.entities.SpaceEntity;
+import Latam.Latam.work.hub.entities.UserEntity;
+import Latam.Latam.work.hub.enums.BookingStatus;
+import Latam.Latam.work.hub.enums.ContractStatus;
 import Latam.Latam.work.hub.enums.InvoiceStatus;
+import Latam.Latam.work.hub.enums.InvoiceType;
+import Latam.Latam.work.hub.repositories.BookingRepository;
 import Latam.Latam.work.hub.repositories.InvoiceRepository;
+import Latam.Latam.work.hub.repositories.RentalContractRepository;
+import Latam.Latam.work.hub.repositories.SpaceRepository;
 import Latam.Latam.work.hub.services.BookingService;
 import Latam.Latam.work.hub.services.MailService;
 import Latam.Latam.work.hub.services.mp.MercadoPagoService;
 import com.mercadopago.MercadoPagoConfig;
 import com.mercadopago.client.merchantorder.MerchantOrderClient;
+import com.mercadopago.client.payment.PaymentClient;
 import com.mercadopago.client.payment.PaymentRefundClient;
 import com.mercadopago.client.preference.*;
+import com.mercadopago.core.MPRequestOptions;
 import com.mercadopago.exceptions.MPApiException;
 import com.mercadopago.exceptions.MPException;
 import com.mercadopago.resources.merchantorder.MerchantOrder;
@@ -17,7 +28,6 @@ import com.mercadopago.resources.preference.Preference;
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
@@ -26,9 +36,11 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class MercadoPagoServiceImpl implements MercadoPagoService {
@@ -46,7 +58,8 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
 
     @Autowired
     private  InvoiceRepository invoiceRepository;
-
+    @Autowired
+    private RentalContractRepository rentalContractRepository;
     @Autowired
     private  MerchantOrderClient merchantOrderClient;
 
@@ -54,11 +67,22 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
     private  PreferenceClient preferenceClient;
 
     @Autowired
+    private PaymentRefundClient paymentRefundClient;
+
+    @Autowired
     private  MailService mailService;
+
+    @Autowired
+    private PaymentClient paymentClient;
 
     @Autowired
     @Lazy
     private  BookingService bookingService;
+
+    @Autowired
+    private SpaceRepository spaceRepository;
+    @Autowired
+    private BookingRepository bookingRepository;
 
     @PostConstruct
     public void init() {
@@ -78,8 +102,8 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                     .build();
             items.add(item);
 
-            String buyerEmailTest = "test_user_153291871@testuser.com";
-            String sellerEmailTest = "test_user_868623445@testuser.com";
+            String buyerEmailTest = "test_user_1440077709@testuser.com";
+            String sellerEmailTest = "test_user_11222044@testuser.com";
 
             PreferencePayerRequest payer = PreferencePayerRequest.builder()
                     .email(buyerEmailTest)
@@ -131,27 +155,124 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                 InvoiceEntity invoiceEntity = this.invoiceRepository.findById(invoiceId)
                         .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
 
-                // Actualizar estado de la factura
+                // Obtener el paymentId del MerchantOrder
+                Long paymentId = merchantOrder.getPayments().get(0).getId();
+
+                // Actualizar estado de la factura y asignar el paymentId
                 invoiceEntity.setStatus(InvoiceStatus.PAID);
+                invoiceEntity.setPaymentId(paymentId);
                 this.invoiceRepository.save(invoiceEntity);
 
-                // Confirmar la reserva (en lugar de activarla directamente aquí)
+                // Handle different invoice types based on the related entity
                 if (invoiceEntity.getBooking() != null) {
+                    // Confirmar la reserva
                     bookingService.confirmBookingPayment(invoiceEntity.getBooking().getId());
+
+                    // Enviar email de confirmación al cliente
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+                    String formattedDate = invoiceEntity.getIssueDate().format(formatter);
+
+                    this.mailService.sendPaymentConfirmationEmail(
+                            invoiceEntity.getBooking().getUser().getEmail(),
+                            invoiceEntity.getBooking().getUser().getName(),
+                            invoiceEntity.getBooking().getSpace().getName(),
+                            formattedDate,
+                            invoiceEntity.getTotalAmount());
                 }
+                else if (invoiceEntity.getRentalContract() != null) {
+                    // Handle rental contract payment
+                    RentalContractEntity contract = invoiceEntity.getRentalContract();
 
-                // Enviar email de confirmación al cliente
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-                String formattedDate = invoiceEntity.getIssueDate().format(formatter);
+                    // For initial payment, activate the contract
+                    if (contract.getContractStatus() == ContractStatus.PENDING) {
+                        contract.setContractStatus(ContractStatus.ACTIVE);
+                        rentalContractRepository.save(contract);
 
-                this.mailService.sendPaymentConfirmationEmail(
-                        invoiceEntity.getBooking().getUser().getEmail(),
-                        invoiceEntity.getBooking().getUser().getName(),
-                        invoiceEntity.getBooking().getSpace().getName(),
-                        formattedDate,
-                        invoiceEntity.getTotalAmount());
+                        // Mark space as unavailable
+                        SpaceEntity space = contract.getSpace();
+                        space.setAvailable(false);
+                        spaceRepository.save(space);
+                    }
+
+                    // Send single payment confirmation email
+                    UserEntity tenant = contract.getTenant();
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+                    mailService.sendRentalPaymentConfirmation(
+                            tenant.getEmail(),
+                            tenant.getName(),
+                            contract.getSpace().getName(),
+                            invoiceEntity.getInvoiceNumber(),
+                            invoiceEntity.getIssueDate().format(formatter),
+                            invoiceEntity.getTotalAmount().toString()
+                    );
+                }
             }
         }
         return "Notification Recibida";
     }
+
+
+    @Override
+    @Transactional
+    public boolean refundPayment(Long invoiceId) throws MPException, MPApiException {
+        try {
+            InvoiceEntity invoice = invoiceRepository.findById(invoiceId)
+                    .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
+
+            // Check if invoice is in a refundable state
+            if (invoice.getStatus() != InvoiceStatus.PAID) {
+                throw new RuntimeException("La factura no está en estado pagado y no puede ser reembolsada");
+            }
+
+            // Get payment ID from invoice
+            Long paymentId = invoice.getPaymentId();
+            if (paymentId == null) {
+                throw new RuntimeException("No se encontró ID de pago para esta factura");
+            }
+
+            String idempotencyKey = UUID.randomUUID().toString();
+
+            MPRequestOptions requestOptions = MPRequestOptions.builder()
+                    .customHeaders(Collections.singletonMap("X-Idempotency-Key", idempotencyKey))
+                    .build();
+
+            // Create a full refund (null amount for full refund)
+            com.mercadopago.resources.payment.PaymentRefund refund = paymentClient.refund(paymentId, null, requestOptions);
+
+            // Check if refund was created successfully - check if we got a non-null response
+            if (refund != null) {
+                // Update invoice status
+                invoice.setStatus(InvoiceStatus.CANCELLED);
+                invoiceRepository.save(invoice);
+
+                // Update booking status
+                BookingEntity booking = invoice.getBooking();
+                booking.setStatus(BookingStatus.CANCELED);
+                booking.setActive(false);
+                bookingRepository.save(booking);
+
+                // Mark the space as available again
+                SpaceEntity space = booking.getSpace();
+                space.setAvailable(true);
+                spaceRepository.save(space);
+
+                // Send refund confirmation email
+                mailService.sendBookingRefundConfirmationEmail(
+                        booking.getUser().getEmail(),
+                        booking.getUser().getName(),
+                        booking.getSpace().getName(),
+                        invoice.getTotalAmount());
+
+                return true;
+            } else {
+                throw new RuntimeException("No se pudo crear el reembolso");
+            }
+        } catch (MPException | MPApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Error al procesar el reembolso: " + e.getMessage(), e);
+        }
+    }
+
 }

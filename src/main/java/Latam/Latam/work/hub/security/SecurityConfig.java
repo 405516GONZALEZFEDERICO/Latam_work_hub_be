@@ -25,18 +25,16 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> {})
                 .authorizeHttpRequests(auth -> auth
-                        // Rutas públicas que no requieren autenticación
                         .requestMatchers(securityPathsConfig.PUBLIC_PATHS.toArray(new String[0]))
                         .permitAll()
                         .requestMatchers("/api/auth/roles/assign").hasAnyRole("DEFAULT", "ADMIN")
-
-                        // Rutas exclusivas para ADMIN
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/users/personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/users/*/upload-img").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/users/get-personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/users/*/get-provider-type").hasRole("PROVEEDOR")
                         .requestMatchers("/api/booking/**").hasRole("CLIENTE")
+                        .requestMatchers("api/rental-contracts/**").hasRole("CLIENTE")
                         .requestMatchers("/api/payments/**").hasRole("CLIENTE")
                         .requestMatchers("/api/location/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/company/*").hasAnyRole("CLIENTE", "PROVEEDOR")

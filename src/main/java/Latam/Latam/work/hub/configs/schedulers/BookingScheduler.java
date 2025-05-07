@@ -1,5 +1,4 @@
-package Latam.Latam.work.hub.configs;
-
+package Latam.Latam.work.hub.configs.schedulers;
 
 import Latam.Latam.work.hub.services.BookingService;
 import lombok.RequiredArgsConstructor;
@@ -18,11 +17,11 @@ public class BookingScheduler {
     private final BookingService bookingService;
 
     /**
-     * Actualiza el estado de todas las reservas cada 15 minutos
+     * Actualiza el estado de todas las reservas cada 5 minutos
      * La disponibilidad de los espacios se actualiza automáticamente cuando
      * una reserva comienza o termina.
      */
-    @Scheduled(fixedRate = 900000) // 15 minutos en milisegundos
+    @Scheduled(fixedRate = 300000) // 5 minutos en milisegundos
     public void updateBookingsStatus() {
         log.info("Iniciando actualización programada de estado de reservas");
         try {

@@ -14,7 +14,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -31,6 +33,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SpaceControlller {
     private final SpaceService spaceService;
+
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('CLIENTE') || hasRole('PROVEEDOR')")
     public ResponseEntity<Boolean> createSpace(
@@ -40,33 +43,34 @@ public class SpaceControlller {
         return ResponseEntity.ok(spaceService.createSpace(spaceDto, images));
     }
 
-@GetMapping("/search")
-public ResponseEntity<Page<SpaceResponseDto>> getActiveAvailableSpaces(
-        @RequestParam(required = false) Double pricePerHour,
-        @RequestParam(required = false) Double pricePerDay,
-        @RequestParam(required = false) Double pricePerMonth,
-        @RequestParam(required = false) Double area,
-        @RequestParam(required = false) Integer capacity,
-        @RequestParam(required = false) Long spaceTypeId,
-        @RequestParam(required = false) Long cityId,
-        @RequestParam(required = false) Long countryId,
-        @RequestParam(required = false) List<Long> amenityIds,
-        @PageableDefault(size = 10) Pageable pageable) {
+    @GetMapping("/search")
+    public ResponseEntity<Page<SpaceResponseDto>> getActiveAvailableSpaces(
+            @RequestParam(required = false) Double pricePerHour,
+            @RequestParam(required = false) Double pricePerDay,
+            @RequestParam(required = false) Double pricePerMonth,
+            @RequestParam(required = false) Double area,
+            @RequestParam(required = false) Integer capacity,
+            @RequestParam(required = false) Long spaceTypeId,
+            @RequestParam(required = false) Long cityId,
+            @RequestParam(required = false) Long countryId,
+            @RequestParam(required = false) List<Long> amenityIds,
+            @PageableDefault(size = 10) Pageable pageable) {
 
-    FiltersSpaceDto filters = FiltersSpaceDto.builder()
-            .pricePerHour(pricePerHour)
-            .pricePerDay(pricePerDay)
-            .pricePerMonth(pricePerMonth)
-            .area(area)
-            .capacity(capacity)
-            .spaceTypeId(spaceTypeId)
-            .cityId(cityId)
-            .countryId(countryId)
-            .amenityIds(amenityIds)
-            .build();
+        FiltersSpaceDto filters = FiltersSpaceDto.builder()
+                .pricePerHour(pricePerHour)
+                .pricePerDay(pricePerDay)
+                .pricePerMonth(pricePerMonth)
+                .area(area)
+                .capacity(capacity)
+                .spaceTypeId(spaceTypeId)
+                .cityId(cityId)
+                .countryId(countryId)
+                .amenityIds(amenityIds)
+                .build();
 
-    return ResponseEntity.ok(spaceService.findSpacesFiltered(filters, pageable));
-}
+        return ResponseEntity.ok(spaceService.findSpacesFiltered(filters, pageable));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<SpaceResponseDto> getSpaceById(@PathVariable Long id) {
         SpaceResponseDto space = spaceService.findSpaceById(id);
@@ -82,6 +86,7 @@ public ResponseEntity<Page<SpaceResponseDto>> getActiveAvailableSpaces(
     ) throws Exception {
         return ResponseEntity.ok(spaceService.updateSpace(spaceId, spaceDto, images));
     }
+
     @GetMapping("/provider/spaces")
     @PreAuthorize("hasRole('PROVEEDOR')")
     public ResponseEntity<Page<SpaceResponseDto>> getProviderSpaces(
@@ -116,4 +121,9 @@ public ResponseEntity<Page<SpaceResponseDto>> getActiveAvailableSpaces(
         }
     }
 
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasRole('PROVEEDOR')")
+    public ResponseEntity<Boolean> deleteSpace(@PathVariable Long id, @RequestParam String userUid) {
+        return ResponseEntity.ok(spaceService.deleteSpace(id, userUid));
+    }
 }

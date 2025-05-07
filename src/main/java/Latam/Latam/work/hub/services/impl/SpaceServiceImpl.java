@@ -18,6 +18,7 @@ import Latam.Latam.work.hub.repositories.SpaceTypeRepository;
 import Latam.Latam.work.hub.services.SpaceService;
 import Latam.Latam.work.hub.services.UserService;
 import Latam.Latam.work.hub.services.cloudinary.CloudinaryService;  // Importar el servicio de Cloudinary
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -267,6 +268,36 @@ public class SpaceServiceImpl implements SpaceService {
             return spacesPage.map(spaceMapper::toDto);
         } catch (Exception e) {
             throw new RuntimeException("Error al obtener los espacios del proveedor: " + e.getMessage(), e);
+        }
+    }
+    /**
+     * Elimina un espacio y sus imágenes asociadas de Cloudinary.
+     *
+     * @param spaceId ID del espacio a eliminar.
+     * @param uid     UID del usuario que intenta eliminar el espacio.
+     * @return true si la eliminación fue exitosa, false en caso contrario.
+     */
+    @Override
+    public boolean deleteSpace(Long spaceId, String uid) {
+        try {
+            SpaceEntity spaceToBeDeleted = this.spaceRepository
+                    .findById(spaceId)
+                    .orElseThrow(() -> new EntityNotFoundException("Espacio no encontrado"));
+
+            if (!spaceToBeDeleted.getOwner().isEnabled() ||
+                    !spaceToBeDeleted.getOwner().getFirebaseUid().equals(uid)) {
+                throw new RuntimeException("No tiene permisos para eliminar este espacio");
+            }
+
+            // Eliminar amenities
+            spaceToBeDeleted.setDeleted(true);
+
+            // Eliminar el espacio
+            this.spaceRepository.save(spaceToBeDeleted);
+            return true;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Error al eliminar el espacio: " + e.getMessage(), e);
         }
     }
 }

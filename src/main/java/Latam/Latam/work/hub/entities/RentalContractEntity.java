@@ -12,6 +12,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -40,8 +41,12 @@ public class RentalContractEntity implements Billable {
     private Double monthlyAmount;         
 
     @Column(name = "deposit_amount")
-    private Double depositAmount;         
-
+    private Double depositAmount;
+    // Añadir estos campos a RentalContractEntity
+    @Column(name = "auto_renewal")
+    private boolean autoRenewal = false;
+    @Column(name = "renewal_months")
+    private Integer renewalMonths;
     @Column(name = "duration_months")
     private Double durationMonths;
 
@@ -58,8 +63,16 @@ public class RentalContractEntity implements Billable {
     private UserEntity tenant ;
 
 
+    // Campo temporal para cumplir con la interfaz Billable
+    @Transient
+    private Double amount;
+
     @Override
     public Double getAmount() {
-        return 0.0;
+        return monthlyAmount;
+    }
+
+    public void setAmount(Double amount) {
+        this.amount = amount;
     }
 }
