@@ -805,7 +805,6 @@ public class RentalContractServiceImpl implements RentalContractService {
 
     @Override
     public void syncSpaceAvailability() {
-        // Sincronizar estados basados en contratos y reservas
         List<SpaceEntity> allSpaces = spaceRepository.findAll();
 
         for (SpaceEntity space : allSpaces) {
@@ -967,5 +966,46 @@ public class RentalContractServiceImpl implements RentalContractService {
                 ))
                 .collect(Collectors.toList());
     }
+
+
+    @Transactional
+    public void processCompletedContractsAndDeposits() {
+        // Buscar contratos que terminaron hoy
+        List<RentalContractEntity> completedContracts = rentalContractRepository
+                .findByEndDateAndContractStatusAndDepositRefunded(
+                        LocalDate.now(),
+                        ContractStatus.ACTIVE,
+                        false
+                );
+
+        for (RentalContractEntity contract : completedContracts) {
+            try {
+                // Verificar que no haya deudas pendientes
+                if (!hasUnpaidInvoices(contract)) {
+                    // Procesar la devolución del depósito
+                    processDepositRefund(contract, 1.0); // 100% si terminó normalmente
+
+                    // Actualizar estado del contrato
+                    contract.setContractStatus(ContractStatus.TERMINATED);
+                    contract.setDepositRefounded(true);
+                    contract.setDepositRefoundDate(LocalDateTime.now());
+                    rentalContractRepository.save(contract);
+
+                    log.info("Contrato {} completado y depósito devuelto", contract.getId());
+                } else {
+                    log.warn("Contrato {} tiene facturas pendientes, no se puede devolver el depósito",
+                            contract.getId());
+                }
+            } catch (Exception e) {
+                log.error("Error procesando contrato {}: {}", contract.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private boolean hasUnpaidInvoices(RentalContractEntity contract) {
+        List<InvoiceEntity> unpaidInvoices = invoiceRepository.findPendingInvoicesByContractId(contract.getId());
+        return !unpaidInvoices.isEmpty();
+    }
+
 
 }

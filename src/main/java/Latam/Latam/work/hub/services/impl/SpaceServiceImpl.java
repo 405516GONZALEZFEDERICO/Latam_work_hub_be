@@ -289,7 +289,7 @@ public class SpaceServiceImpl implements SpaceService {
                 throw new RuntimeException("No tiene permisos para eliminar este espacio");
             }
 
-            // Eliminar amenities
+
             spaceToBeDeleted.setDeleted(true);
 
             // Eliminar el espacio
@@ -300,4 +300,6 @@ public class SpaceServiceImpl implements SpaceService {
             throw new RuntimeException("Error al eliminar el espacio: " + e.getMessage(), e);
         }
     }
+
+
 }

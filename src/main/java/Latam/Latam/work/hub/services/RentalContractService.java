@@ -88,5 +88,5 @@ public interface RentalContractService {
             ContractStatus status,
             Pageable pageable);
     String generateInvoicePaymentLink(Long invoiceId);
-
+    void processCompletedContractsAndDeposits();
 }

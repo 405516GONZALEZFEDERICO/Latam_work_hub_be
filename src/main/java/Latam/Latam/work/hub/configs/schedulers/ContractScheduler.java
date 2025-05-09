@@ -108,4 +108,19 @@ public class ContractScheduler {
         }
     }
 
+    /**
+     * Verifica contratos terminados y procesa devoluciones de depósitos
+     * Se ejecuta cada día a las 4:00 AM
+     */
+    @Scheduled(cron = "0 0 4 * * ?")
+    public void processCompletedContractsAndDeposits() {
+        log.info("Iniciando verificación de contratos terminados y devoluciones de depósitos");
+        try {
+            rentalContractService.processCompletedContractsAndDeposits();
+            log.info("Procesamiento de contratos terminados y depósitos completado");
+        } catch (Exception e) {
+            log.error("Error al procesar contratos terminados y depósitos: {}", e.getMessage(), e);
+        }
+    }
+
 }

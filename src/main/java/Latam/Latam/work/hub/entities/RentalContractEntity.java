@@ -17,8 +17,8 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Table(name = "CONTRATOS_ALQUILER")
 @Getter
@@ -42,11 +42,13 @@ public class RentalContractEntity implements Billable {
 
     @Column(name = "deposit_amount")
     private Double depositAmount;
-    // Añadir estos campos a RentalContractEntity
+
     @Column(name = "auto_renewal")
     private boolean autoRenewal = false;
+
     @Column(name = "renewal_months")
     private Integer renewalMonths;
+
     @Column(name = "duration_months")
     private Double durationMonths;
 
@@ -62,8 +64,12 @@ public class RentalContractEntity implements Billable {
     @JoinColumn(name = "user_id")
     private UserEntity tenant ;
 
+    @Column(name = "deposit_refounded")
+    private boolean depositRefounded = false;
 
-    // Campo temporal para cumplir con la interfaz Billable
+    @Column(name = "deposit_refound_date")
+    private LocalDateTime depositRefoundDate;
+
     @Transient
     private Double amount;
 

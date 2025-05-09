@@ -57,16 +57,15 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
             "AND rc.endDate BETWEEN :startDate AND :endDate")
     List<RentalContractEntity> findContractsAboutToExpire(LocalDate startDate, LocalDate endDate);
 
-    // Add this method to your RentalContractRepository interface
     @Query("SELECT c FROM RentalContractEntity c " +
             "WHERE c.autoRenewal = true " +
             "AND c.contractStatus = 'ACTIVE' " +
             "AND c.endDate BETWEEN :today AND :threshold " +
             "ORDER BY c.endDate ASC")
     List<RentalContractEntity> findContractsForAutoRenewal(LocalDate today, LocalDate threshold);
-
-
-
+    /**
+     * Encuentra contratos por estado
+     */
     List<RentalContractEntity> findByContractStatus(ContractStatus status);
 
     @Query("SELECT c FROM RentalContractEntity c WHERE c.endDate <= :threshold " +
@@ -75,5 +74,13 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
 
     boolean existsBySpaceAndContractStatus(SpaceEntity space, ContractStatus status);
 
+    @Query("SELECT c FROM RentalContractEntity c " +
+            "WHERE c.endDate = :endDate " +
+            "AND c.contractStatus = :status " +
+            "AND c.depositRefounded = :depositRefunded")
+    List<RentalContractEntity> findByEndDateAndContractStatusAndDepositRefunded(
+            LocalDate endDate,
+            ContractStatus status,
+            boolean depositRefunded);
 
 }

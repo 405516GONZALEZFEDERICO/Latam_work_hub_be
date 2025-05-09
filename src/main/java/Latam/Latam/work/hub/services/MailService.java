@@ -18,8 +18,6 @@ public interface MailService {
     void sendOwnerContractCancellationNotification(String ownerEmail, String ownerName, String spaceName, String tenantName, String startDate, String endDate);
     void sendContractRenewalNotification(String tenantEmail, String tenantName, String spaceName, String months, String newEndDate);
     void sendOwnerContractRenewalNotification(String ownerEmail, String ownerName, String spaceName, String tenantName, String months, String newEndDate);
-    void sendContractActivationNotification(String tenantEmail, String tenantName, String spaceName, String startDate, String endDate, String monthlyAmount);
-    void sendOwnerContractActivationNotification(String ownerEmail, String ownerName, String spaceName, String tenantName, String startDate, String endDate);
     void sendRentalPaymentConfirmation(String tenantEmail, String tenantName, String spaceName, String invoiceNumber, String paymentDate, String amount);
 
 
