@@ -17,19 +17,16 @@ public class FirebaseConfig {
     @PostConstruct
     public void initFirebase() {
         try {
-            // Add debugging to see the actual JSON content
             System.out.println("Firebase config JSON (first 100 chars): " +
                     (firebaseConfigJson.length() > 100 ?
                             firebaseConfigJson.substring(0, 100) + "..." :
                             firebaseConfigJson));
 
-            // Remove any potential outer quotes that might be wrapping the JSON
             String cleanJson = firebaseConfigJson;
             if (cleanJson.startsWith("\"") && cleanJson.endsWith("\"")) {
                 cleanJson = cleanJson.substring(1, cleanJson.length() - 1);
             }
 
-            // Replace escaped quotes with actual quotes
             cleanJson = cleanJson.replace("\\\"", "\"");
 
             ByteArrayInputStream serviceAccount = new ByteArrayInputStream(cleanJson.getBytes());

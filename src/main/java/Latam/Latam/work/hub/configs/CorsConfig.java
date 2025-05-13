@@ -14,10 +14,8 @@ public class CorsConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
 
-        // Allow credentials
         config.setAllowCredentials(true);
 
-        // Allow specific origins
         config.addAllowedOrigin("http://localhost");
         config.addAllowedOrigin("http://localhost:80");
         config.addAllowedOrigin("http://localhost:4200");
@@ -32,7 +30,7 @@ public class CorsConfig {
         config.addExposedHeader("Authorization");
 
         source.registerCorsConfiguration("/**", config);
-        source.registerCorsConfiguration("/api/auth/**", config); 
+        source.registerCorsConfiguration("/api/auth/**", config);
 
         return new CorsFilter(source);
     }
