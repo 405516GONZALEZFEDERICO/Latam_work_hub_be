@@ -16,16 +16,22 @@ import Latam.Latam.work.hub.services.BookingService;
 import Latam.Latam.work.hub.services.InvoiceService;
 import Latam.Latam.work.hub.services.MailService;
 import Latam.Latam.work.hub.services.mp.MercadoPagoService;
+import com.mercadopago.exceptions.MPApiException;
+import com.mercadopago.exceptions.MPException;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -71,6 +77,14 @@ public class BookingServiceImpl implements BookingService {
             bookingEntity.setCounterPersons(bookingDto.getCounterPersons());
             bookingEntity.setTotalAmount(bookingDto.getTotalAmount());
             bookingEntity.setStatus(BookingStatus.PENDING_PAYMENT);
+            BookingType bookingType=determineBookingType(bookingDto);
+              if (bookingType == BookingType.PER_DAY) {
+                  bookingEntity.setEndDate(bookingDto.getStartDate()
+                      .plusDays(1)
+                      .withHour(bookingDto.getStartDate().getHour())
+                      .withMinute(bookingDto.getStartDate().getMinute())
+                      .withSecond(bookingDto.getStartDate().getSecond()));
+              }
             bookingEntity.setBookingType(determineBookingType(bookingDto));
 
             var savedBooking = bookingRepository.saveAndFlush(bookingEntity);
@@ -121,13 +135,18 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setActive(true);
         bookingRepository.save(booking);
-
+        Optional<SpaceEntity> space= this.spaceRepository.findById(booking.getSpace().getId());
+        if (space.isEmpty()){
+            throw new RuntimeException("Espacio no encontrado");
+        }
+        space.get().setAvailable(false);
+        this.spaceRepository.save(space.get());
         // Enviar email al dueño del espacio para notificarle de la reserva
-        SpaceEntity space = booking.getSpace();
+        SpaceEntity spaced = booking.getSpace();
         mailService.sendBookingNotificationToOwner(
-                space.getOwner().getEmail(),
-                space.getOwner().getName(),
-                space.getName(),
+                spaced.getOwner().getEmail(),
+                spaced.getOwner().getName(),
+                spaced.getName(),
                 booking.getUser().getName(),
                 booking.getStartDate().toString(),
                 booking.getEndDate() != null ? booking.getEndDate().toString() : "",
@@ -178,6 +197,7 @@ public class BookingServiceImpl implements BookingService {
             // Actualizar el estado de la factura si existe
             if (invoice != null) {
                 invoice.setStatus(InvoiceStatus.CANCELLED);
+
                 invoiceRepository.save(invoice);
             }
         }
@@ -193,27 +213,50 @@ public class BookingServiceImpl implements BookingService {
             if (booking.getStatus() == BookingStatus.CONFIRMED) {
                 booking.setStatus(BookingStatus.ACTIVE);
                 booking.setActive(true);
-
-                // Marcar el espacio como no disponible
                 SpaceEntity space = booking.getSpace();
                 space.setAvailable(false);
                 spaceRepository.save(space);
             }
         }
 
-        // Completar reservas cuya fecha de fin ha pasado
-        List<BookingEntity> expiredBookings = bookingRepository.findExpiredBookings(now);
-        for (BookingEntity booking : expiredBookings) {
-            if (booking.getStatus() == BookingStatus.ACTIVE) {
+        // Completar reservas según su tipo
+        List<BookingEntity> activeBookings = bookingRepository.findByStatus(BookingStatus.ACTIVE);
+        for (BookingEntity booking : activeBookings) {
+            boolean shouldComplete = false;
+
+            switch (booking.getBookingType()) {
+                case PER_HOUR:
+                    // Completar si la hora actual es posterior a la hora de fin
+                    LocalDateTime bookingEndDateTime = booking.getStartDate()
+                            .withHour(booking.getEndHour().getHour())
+                            .withMinute(booking.getEndHour().getMinute());
+                    shouldComplete = now.isAfter(bookingEndDateTime);
+                    break;
+
+                case PER_DAY:
+                    // Completar si la fecha actual es posterior al día de la reserva
+                    LocalDateTime endOfBookingDay = booking.getStartDate()
+                            .plusDays(1)
+                            .withHour(0)
+                            .withMinute(0)
+                            .withSecond(0);
+                    shouldComplete = now.isAfter(endOfBookingDay);
+                    break;
+
+                case PER_MONTH:
+                    // Completar si la fecha actual es posterior a la fecha de fin
+                    shouldComplete = booking.getEndDate() != null && now.isAfter(booking.getEndDate());
+                    break;
+            }
+
+            if (shouldComplete) {
                 booking.setStatus(BookingStatus.COMPLETED);
                 booking.setActive(false);
 
-                // Marcar el espacio como disponible nuevamente
                 SpaceEntity space = booking.getSpace();
                 space.setAvailable(true);
                 spaceRepository.save(space);
 
-                // Opcionalmente, enviar email de agradecimiento o solicitud de reseña
                 mailService.sendBookingCompletedEmail(
                         booking.getUser().getEmail(),
                         booking.getUser().getName(),
@@ -223,7 +266,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         bookingRepository.saveAll(upcomingBookings);
-        bookingRepository.saveAll(expiredBookings);
+        bookingRepository.saveAll(activeBookings);
     }
 
     @Override
@@ -263,4 +306,31 @@ public class BookingServiceImpl implements BookingService {
             return dto;
         });
     }
+    @Override
+    public String generateBookingPaymentLink(Long bookingId) {
+        BookingEntity booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Reserva no encontrada"));
+
+        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+            throw new RuntimeException("La reserva no está pendiente de pago");
+        }
+
+        try {
+            String buyerEmail = booking.getUser().getEmail();
+            String sellerEmail = booking.getSpace().getOwner().getEmail();
+            String description = "Reserva de " + booking.getSpace().getName() + " - " +
+                    booking.getStartDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+
+            return mercadoPagoService.createInvoicePaymentPreference(
+                    booking.getId(),
+                    description,
+                    BigDecimal.valueOf(booking.getTotalAmount()),
+                    buyerEmail,
+                    sellerEmail
+            );
+        } catch (MPException | MPApiException e) {
+            throw new RuntimeException("Error al generar el link de pago: " + e.getMessage());
+        }
+    }
+
 }

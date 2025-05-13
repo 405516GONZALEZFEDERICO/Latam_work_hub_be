@@ -10,6 +10,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
@@ -18,6 +20,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "FACTURAS")
@@ -49,7 +52,8 @@ public class InvoiceEntity {
     private Double totalAmount;
 
     @Enumerated(EnumType.STRING)
-    private InvoiceStatus status;        
+    private InvoiceStatus status;
+
 
     @OneToOne
     @JoinColumn(name = "booking_id")
@@ -57,16 +61,9 @@ public class InvoiceEntity {
 
     @Column(name = "payment_id")
     private Long paymentId;
-
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "rental_contract_id")
-    private RentalContractEntity rentalContract; 
-
-    @Column(name = "PAID_DATE")
-    private LocalDateTime paidDate;
-
-    @Column(name = "PAYMENT_URL")
-    private String paymentUrl;
+    private RentalContractEntity rentalContract;
 
 }
 

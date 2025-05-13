@@ -3,11 +3,12 @@ package Latam.Latam.work.hub.services.impl;
 import Latam.Latam.work.hub.configs.state.machine.contract.ContractPolicyService;
 import Latam.Latam.work.hub.configs.state.machine.contract.NotificationRetryService;
 import Latam.Latam.work.hub.configs.state.machine.contract.StateMachineContract;
-import Latam.Latam.work.hub.dtos.common.ContractStateChangeDto;
 import Latam.Latam.work.hub.dtos.common.InvoiceHistoryDto;
 import Latam.Latam.work.hub.dtos.common.PendingInvoiceDto;
 import Latam.Latam.work.hub.dtos.common.RentalContractDto;
 import Latam.Latam.work.hub.dtos.common.RentalContractResponseDto;
+import Latam.Latam.work.hub.dtos.common.isAutoRenewalDto;
+import Latam.Latam.work.hub.entities.BookingEntity;
 import Latam.Latam.work.hub.entities.InvoiceEntity;
 import Latam.Latam.work.hub.entities.RentalContractEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
@@ -37,10 +38,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static Latam.Latam.work.hub.configs.state.machine.contract.ContractPolicyService.NOTICE_PERIOD_DAYS;
@@ -57,7 +59,6 @@ public class RentalContractServiceImpl implements RentalContractService {
     private final InvoiceService invoiceService;
     private final MercadoPagoService mercadoPagoService;
     private final MailService mailService;
-
     // Nuevos servicios
     private final StateMachineContract stateMachine;
     private final ContractPolicyService policyService;
@@ -72,7 +73,7 @@ public class RentalContractServiceImpl implements RentalContractService {
         List<InvoiceEntity> overdueInvoices = invoiceRepository.findByDueDateBeforeAndPaidFalse(today);
 
         for (InvoiceEntity invoice : overdueInvoices) {
-            RentalContractEntity contract = invoice.getRentalContract();
+            RentalContractEntity contract = (RentalContractEntity) invoice.getRentalContract();
             UserEntity tenant = contract.getTenant();
             UserEntity owner = contract.getSpace().getOwner();
 
@@ -141,6 +142,8 @@ public class RentalContractServiceImpl implements RentalContractService {
             contract.setDepositAmount(contractDto.getDepositAmount());
             contract.setDurationMonths(Double.valueOf(contractDto.getDurationMonths()));
             contract.setContractStatus(ContractStatus.DRAFT);
+            contract.setDepositAmount(contractDto.getDepositAmount());
+
 
             // Guardar contrato
             RentalContractEntity savedContract = rentalContractRepository.saveAndFlush(contract);
@@ -164,6 +167,37 @@ public class RentalContractServiceImpl implements RentalContractService {
             log.error("Error al crear contrato de alquiler: {}", e.getMessage(), e);
             throw new RuntimeException("Error al crear el contrato de alquiler: " + e.getMessage(), e);
         }
+    }
+
+@Override
+public isAutoRenewalDto isAutoRenewal(Long contractId) {
+    Optional<RentalContractEntity> rentalContractEntity = this.rentalContractRepository.findById(contractId);
+    if (!rentalContractEntity.isPresent()) {
+        throw new RuntimeException("El contrato de alquiler no existe");
+    }
+    boolean isAutoRenewal = rentalContractEntity.get().isAutoRenewal();
+    if (isAutoRenewal) {
+        return new isAutoRenewalDto(true, rentalContractEntity.get().getRenewalMonths());
+    } else {
+        return new isAutoRenewalDto(null, null);
+    }
+}
+
+    @Override
+    public Boolean updateIsAutoRenewal(Long contractId, Boolean isAutoRenewal) {
+        Optional<RentalContractEntity> rentalContractEntity=this.rentalContractRepository.findById(contractId);
+        if(rentalContractEntity.isEmpty()){
+            throw new RuntimeException("El contrato de alquiler no existe");
+        }
+        rentalContractEntity.get().setAutoRenewal(isAutoRenewal);
+        rentalContractRepository.save(rentalContractEntity.get());
+        mailService.sendOwnerAndTenantAutoRenewalNotification(
+                rentalContractEntity.get().getTenant().getEmail(),
+                rentalContractEntity.get().getSpace().getOwner().getEmail(),
+                rentalContractEntity.get().getSpace().getName(),
+                isAutoRenewal
+        );
+        return Boolean.TRUE;
     }
 
     /**
@@ -240,7 +274,6 @@ public class RentalContractServiceImpl implements RentalContractService {
         // Since CANCELLATION_NOTICE_DAYS might be private, we'll use a constant value of 30 days
         // which matches what's in the ContractPolicyService
         policyDetails.put("noticePeriodDays", ContractPolicyService.NOTICE_PERIOD_DAYS);
-        policyDetails.put("contractId", contractId);
         policyDetails.put("contractStatus", contract.getContractStatus().toString());
 
         // Calculate if cancellation is allowed based on policy
@@ -312,43 +345,7 @@ public class RentalContractServiceImpl implements RentalContractService {
                 "No se pudo notificar al propietario sobre el nuevo contrato ID: " + contract.getId()
         );
     }
-//
-//    @Override
-//    public List<RentalContractResponseDto> getUserContracts(String uid) {
-//        List<RentalContractEntity> contracts = rentalContractRepository.findByUserFirebaseUid(uid);
-//        return contracts.stream()
-//                .map(this::mapToResponseDto)
-//                .collect(Collectors.toList());
-//    }
 
-    /**
-     * Mapea una entidad de contrato a un DTO de respuesta
-     */
-    private RentalContractResponseDto mapToResponseDto(RentalContractEntity contract) {
-        RentalContractResponseDto dto = new RentalContractResponseDto();
-        dto.setId(contract.getId());
-        dto.setSpaceName(contract.getSpace().getName());
-        dto.setOwnerName(contract.getSpace().getOwner().getName());
-        dto.setStartDate(contract.getStartDate());
-        dto.setEndDate(contract.getEndDate());
-        dto.setMonthlyAmount(contract.getMonthlyAmount());
-        dto.setDepositAmount(contract.getDepositAmount());
-        dto.setStatus(contract.getContractStatus());
-
-        // Verificar si hay factura pendiente
-        InvoiceEntity currentInvoice = getCurrentInvoice(contract.getId());
-        if (currentInvoice != null &&
-                (currentInvoice.getStatus() == InvoiceStatus.DRAFT ||
-                        currentInvoice.getStatus() == InvoiceStatus.ISSUED)) {
-            dto.setHasCurrentInvoicePending(true);
-            dto.setCurrentInvoiceNumber(currentInvoice.getInvoiceNumber());
-            dto.setCurrentInvoiceDueDate(currentInvoice.getDueDate().toLocalDate());
-        } else {
-            dto.setHasCurrentInvoicePending(false);
-        }
-
-        return dto;
-    }
 
     public List<PendingInvoiceDto> getPendingInvoices(Long contractId) {
         return invoiceRepository.findByRentalContractIdAndStatus(contractId, InvoiceStatus.ISSUED)
@@ -476,7 +473,7 @@ public class RentalContractServiceImpl implements RentalContractService {
      * Notifica al inquilino sobre la nueva factura
      */
     private void notifyTenantAboutNewInvoice(InvoiceEntity invoice) {
-        RentalContractEntity contract = invoice.getRentalContract();
+        RentalContractEntity contract = (RentalContractEntity) invoice.getRentalContract();
         UserEntity tenant = contract.getTenant();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -499,7 +496,7 @@ public class RentalContractServiceImpl implements RentalContractService {
 
         for (InvoiceEntity invoice : expiringInvoices) {
             if (invoice.getStatus() != InvoiceStatus.PAID) {
-                RentalContractEntity contract = invoice.getRentalContract();
+                RentalContractEntity contract = (RentalContractEntity) invoice.getRentalContract();
                 UserEntity tenant = contract.getTenant();
                 DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -596,6 +593,13 @@ public class RentalContractServiceImpl implements RentalContractService {
 
         log.info("Procesando reembolso de depósito para contrato ID {}: ${} ({:.0f}%)",
                 contract.getId(), refundAmount, refundPercentage * 100);
+       Optional<RentalContractEntity> rentalContractEntity= this.rentalContractRepository.findById(contract.getId());
+       if (rentalContractEntity.isPresent()) {
+           rentalContractEntity.get().setDepositRefounded(true);
+           rentalContractEntity.get().setDepositRefundedAmount(refundAmount);
+           rentalContractEntity.get().setDepositRefoundDate(LocalDateTime.now());
+           rentalContractRepository.save(rentalContractEntity.get());
+       }
 
         // Aquí se integraría con la pasarela de pagos para procesar el reembolso
         // Por ahora, solo notificamos sobre el reembolso
@@ -609,11 +613,8 @@ public class RentalContractServiceImpl implements RentalContractService {
         final String spaceName = contract.getSpace().getName();
         final String refundAmountStr = String.format("%.2f", refundAmount);
 
-        notificationRetryService.sendEmailWithRetry(
-                () -> mailService.sendDepositRefundNotification(
-                        tenantEmail, tenantName, spaceName, refundAmountStr
-                ),
-                "No se pudo notificar al inquilino sobre el reembolso del depósito"
+        mailService.sendDepositRefundNotification(
+                tenantEmail, tenantName, spaceName, refundAmountStr
         );
     }
 
@@ -633,20 +634,14 @@ public class RentalContractServiceImpl implements RentalContractService {
         final String startDate = contract.getStartDate().format(formatter);
         final String endDate = contract.getEndDate().format(formatter);
 
-        // Notificar al inquilino con reintentos
-        notificationRetryService.sendEmailWithRetry(
-                () -> mailService.sendContractCancellationNotification(
-                        tenantEmail, tenantName, spaceName, startDate, endDate
-                ),
-                "No se pudo notificar al inquilino sobre la cancelación del contrato"
+        // Notificar al inquilino
+        mailService.sendContractCancellationNotification(
+                tenantEmail, tenantName, spaceName, startDate, endDate
         );
 
-        // Notificar al propietario con reintentos
-        notificationRetryService.sendEmailWithRetry(
-                () -> mailService.sendOwnerContractCancellationNotification(
-                        ownerEmail, ownerName, spaceName, tenantName, startDate, endDate
-                ),
-                "No se pudo notificar al propietario sobre la cancelación del contrato"
+        // Notificar al propietario
+        mailService.sendOwnerContractCancellationNotification(
+                ownerEmail, ownerName, spaceName, tenantName, startDate, endDate
         );
     }
 
@@ -692,7 +687,6 @@ public class RentalContractServiceImpl implements RentalContractService {
         RentalContractEntity contract = rentalContractRepository.findById(contractId)
                 .orElseThrow(() -> new EntityNotFoundException("Contrato no encontrado"));
 
-        // Añadir campos al contrato para renovación automática
         contract.setAutoRenewal(autoRenew);
         contract.setRenewalMonths(renewalMonths);
         rentalContractRepository.save(contract);
@@ -723,30 +717,31 @@ public class RentalContractServiceImpl implements RentalContractService {
                 "No se pudo notificar al inquilino sobre la configuración de renovación automática"
         );
     }
-
-    /**
-     * Procesa renovaciones automáticas de contratos
-     * Se llamaría desde ContractScheduler
-     */
     @Transactional
-    @Override
     public void processAutoRenewals() {
         LocalDate today = LocalDate.now();
-        LocalDate renewalThreshold = today.plusDays(7); // 7 días antes de vencimiento
+        LocalDate renewalThreshold = today.plusDays(7);
 
-        // Buscar contratos con renovación automática que vencen pronto
         List<RentalContractEntity> contractsToRenew = rentalContractRepository
                 .findContractsForAutoRenewal(today, renewalThreshold);
 
         for (RentalContractEntity contract : contractsToRenew) {
             try {
-                // Solo procesar si la renovación automática está activada
                 if (contract.isAutoRenewal() && contract.getRenewalMonths() != null) {
-                    // Notificar primero sobre la renovación automática inminente
-                    notifyUpcomingAutoRenewal(contract);
+                    String tenantEmail = contract.getTenant().getEmail();
+                    String tenantName = contract.getTenant().getName();
+                    String spaceName = contract.getSpace().getName();
+                    String endDate = contract.getEndDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+                    String renewalMonths = contract.getRenewalMonths().toString();
 
-                    // Después implementaríamos la renovación real
-                    // En este caso la hemos separado para dar tiempo al usuario de cancelar
+                    notificationRetryService.sendEmailWithRetry(
+                            () -> mailService.sendUpcomingAutoRenewalNotification(
+                                    tenantEmail, tenantName, spaceName, endDate, renewalMonths
+                            ),
+                            "No se pudo notificar al inquilino sobre la renovación automática próxima"
+                    );
+
+                    log.info("Notificación de renovación automática enviada para contrato ID: {}", contract.getId());
                 }
             } catch (Exception e) {
                 log.error("Error al procesar renovación automática para contrato ID {}: {}",
@@ -755,26 +750,27 @@ public class RentalContractServiceImpl implements RentalContractService {
         }
     }
 
-    /**
-     * Notifica sobre una renovación automática inminente
-     */
-    private void notifyUpcomingAutoRenewal(RentalContractEntity contract) {
-        UserEntity tenant = contract.getTenant();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    @Transactional
+    public void executeAutoRenewals() {
+        LocalDate today = LocalDate.now();
+        LocalDate executionThreshold = today.plusDays(1);
 
-        final String tenantEmail = tenant.getEmail();
-        final String tenantName = tenant.getName();
-        final String spaceName = contract.getSpace().getName();
-        final String endDate = contract.getEndDate().format(formatter);
-        final String renewalMonths = String.valueOf(contract.getRenewalMonths());
+        List<RentalContractEntity> contractsDueForRenewal = rentalContractRepository
+                .findContractsForAutoRenewalExecution(today, executionThreshold);
 
-        notificationRetryService.sendEmailWithRetry(
-                () -> mailService.sendUpcomingAutoRenewalNotification(
-                        tenantEmail, tenantName, spaceName, endDate, renewalMonths
-                ),
-                "No se pudo notificar al inquilino sobre la renovación automática inminente"
-        );
+        for (RentalContractEntity contract : contractsDueForRenewal) {
+            try {
+                if (contract.isAutoRenewal() && contract.getRenewalMonths() != null) {
+                    renewContract(contract.getId(), contract.getRenewalMonths());
+                    log.info("Auto-renewed contract ID: {}", contract.getId());
+                }
+            } catch (Exception e) {
+                log.error("Error auto-renewing contract ID {}: {}",
+                        contract.getId(), e.getMessage(), e);
+            }
+        }
     }
+
     /**
      * Notifica la renovación del contrato a las partes involucradas
      */
@@ -803,20 +799,6 @@ public class RentalContractServiceImpl implements RentalContractService {
         );
     }
 
-    @Override
-    public void syncSpaceAvailability() {
-        List<SpaceEntity> allSpaces = spaceRepository.findAll();
-
-        for (SpaceEntity space : allSpaces) {
-            boolean hasActiveContract = rentalContractRepository
-                    .existsBySpaceAndContractStatus(space, ContractStatus.ACTIVE);
-
-            if (!hasActiveContract) {
-                space.setAvailable(true);
-                spaceRepository.save(space);
-            }
-        }
-    }
     @Override
     public void updateSpaceStatuses() {
         List<RentalContractEntity> activeContracts = rentalContractRepository
@@ -917,7 +899,7 @@ public class RentalContractServiceImpl implements RentalContractService {
         }
 
         try {
-            RentalContractEntity contract = invoice.getRentalContract();
+            RentalContractEntity contract = (RentalContractEntity) invoice.getRentalContract();
             String buyerEmail = contract.getTenant().getEmail();
             String sellerEmail = contract.getSpace().getOwner().getEmail();
 
@@ -934,15 +916,6 @@ public class RentalContractServiceImpl implements RentalContractService {
     }
 
 
-    @Override
-    public List<ContractStateChangeDto> getContractHistory(Long contractId) {
-        RentalContractEntity contract = rentalContractRepository.findById(contractId)
-                .orElseThrow(() -> new EntityNotFoundException("Contrato no encontrado"));
-
-        // Aquí implementarías la lógica para obtener el historial de cambios de estado
-        // Por ahora retornamos una lista vacía
-        return new ArrayList<>();
-    }
 
     @Override
     public List<InvoiceHistoryDto> getContractInvoices(Long contractId) {
@@ -958,11 +931,9 @@ public class RentalContractServiceImpl implements RentalContractService {
                         BigDecimal.valueOf(invoice.getTotalAmount()),
                         invoice.getIssueDate(),
                         invoice.getDueDate(),
-                        invoice.getPaidDate(),
                         invoice.getStatus(),
                         invoice.getType(),
-                        invoice.getDescription(),
-                        invoice.getPaymentUrl()
+                        invoice.getDescription()
                 ))
                 .collect(Collectors.toList());
     }
@@ -1006,6 +977,5 @@ public class RentalContractServiceImpl implements RentalContractService {
         List<InvoiceEntity> unpaidInvoices = invoiceRepository.findPendingInvoicesByContractId(contract.getId());
         return !unpaidInvoices.isEmpty();
     }
-
 
 }

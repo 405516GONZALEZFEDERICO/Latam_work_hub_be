@@ -15,6 +15,6 @@ public interface BookingService {
     void cancelAndRefoundPayment(Long bookingId);
     void updateBookingsStatus();
 
-
+    String generateBookingPaymentLink(Long bookingId);
    Page<BookingResponseDto> getUserBookings(String uid, BookingStatus status, Pageable pageable);
 }

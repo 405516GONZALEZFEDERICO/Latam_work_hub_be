@@ -3,9 +3,9 @@ package Latam.Latam.work.hub.controllers;
 import Latam.Latam.work.hub.dtos.common.PendingInvoiceDto;
 import Latam.Latam.work.hub.dtos.common.RentalContractDto;
 import Latam.Latam.work.hub.dtos.common.RentalContractResponseDto;
-import Latam.Latam.work.hub.dtos.common.ContractStateChangeDto;
 import Latam.Latam.work.hub.dtos.common.InvoiceHistoryDto;
 import Latam.Latam.work.hub.dtos.common.AutoRenewalDto;
+import Latam.Latam.work.hub.dtos.common.isAutoRenewalDto;
 import Latam.Latam.work.hub.enums.ContractStatus;
 import Latam.Latam.work.hub.services.RentalContractService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +18,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -108,19 +109,29 @@ public class RentalContractController {
         String paymentUrl = rentalContractService.renewContract(contractId, months);
         return ResponseEntity.ok(paymentUrl);
     }
-
     /**
-     * Obtiene el historial de cambios de estado de un contrato
+     * Obtiene el estado de renovación automática de un contrato
      * @param contractId ID del contrato
-     * @return Lista de cambios de estado
+     * @return Estado de renovación automática
      */
-    @GetMapping("/{contractId}/history")
-    @PreAuthorize("hasRole('CLIENTE')")
-    public ResponseEntity<List<ContractStateChangeDto>> getContractHistory(@PathVariable Long contractId) {
-        List<ContractStateChangeDto> history = rentalContractService.getContractHistory(contractId);
-        return ResponseEntity.ok(history);
+
+    @GetMapping("/{contractId}/auto-renewal")
+    public ResponseEntity<isAutoRenewalDto> isAutoRenewal(@PathVariable Long contractId) {
+        isAutoRenewalDto isAutoRenewal = rentalContractService.isAutoRenewal(contractId);
+        return ResponseEntity.ok(isAutoRenewal);
     }
 
+    /**
+     * Actualiza la configuración de renovación automática de un contrato
+     * @param contractId ID del contrato
+     * @param isAutoRenewal Nuevo estado de renovación automática
+     * @return Estado actualizado
+     */
+    @PutMapping("/{contractId}/update-is-auto-renewal")
+    public ResponseEntity<Boolean> updateIsAutoRenewal(@PathVariable Long contractId, @RequestParam Boolean isAutoRenewal) {
+        boolean updated = rentalContractService.updateIsAutoRenewal(contractId, isAutoRenewal);
+        return ResponseEntity.ok(updated);
+    }
     /**
      * Obtiene el historial completo de facturas de un contrato
      * @param contractId ID del contrato
