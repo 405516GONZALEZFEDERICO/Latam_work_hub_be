@@ -1,6 +1,5 @@
 package Latam.Latam.work.hub.services.impl;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
 import Latam.Latam.work.hub.dtos.common.BookingDto;
 import Latam.Latam.work.hub.dtos.common.BookingResponseDto;
 import Latam.Latam.work.hub.entities.BookingEntity;
@@ -22,8 +21,6 @@ import com.mercadopago.exceptions.MPException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -31,10 +28,8 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -49,7 +44,7 @@ public class BookingServiceImpl implements BookingService {
     private final MailService mailService;
     private final MercadoPagoService mercadoPagoService;
     private final InvoiceRepository invoiceRepository;
-    private static final Logger log = LoggerFactory.getLogger(BookingServiceImpl.class);
+
     @Override
     @Transactional
     public String createBooking(BookingDto bookingDto) {
@@ -210,86 +205,70 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public void updateBookingsStatus() {
-        ZoneId buenosAiresZoneId = ZoneId.of("America/Argentina/Buenos_Aires");
-        LocalDateTime nowInBuenosAires = LocalDateTime.now(buenosAiresZoneId);
+        LocalDateTime now = LocalDateTime.now();
 
-        log.debug("Ejecutando updateBookingsStatus con hora de Buenos Aires: {}", nowInBuenosAires);
-
-        List<BookingEntity> bookingsToSave = new ArrayList<>();
-
-        // Activar reservas
-        List<BookingEntity> upcomingBookings = bookingRepository.findUpcomingBookings(nowInBuenosAires);
+        // Activar reservas cuya fecha de inicio ha llegado
+        List<BookingEntity> upcomingBookings = bookingRepository.findUpcomingBookings(now);
         for (BookingEntity booking : upcomingBookings) {
             if (booking.getStatus() == BookingStatus.CONFIRMED) {
-                log.info("Activando Booking ID: {} (startDate: {})", booking.getId(), booking.getStartDate());
                 booking.setStatus(BookingStatus.ACTIVE);
                 booking.setActive(true);
                 SpaceEntity space = booking.getSpace();
                 space.setAvailable(false);
                 spaceRepository.save(space);
-                bookingsToSave.add(booking);
             }
         }
 
-        // Completar reservas
+        // Completar reservas según su tipo
         List<BookingEntity> activeBookings = bookingRepository.findByStatus(BookingStatus.ACTIVE);
         for (BookingEntity booking : activeBookings) {
             boolean shouldComplete = false;
-            LocalDateTime effectiveBookingEndDateTime = null;
 
             switch (booking.getBookingType()) {
                 case PER_HOUR:
-                    // Asume que booking.endDate para PER_HOUR es el momento exacto de finalización.
-                    // Si no, y dependes de startDate + endHour, ajusta aquí.
-                    // Basado en la captura de DBeaver, endDate parece ser el timestamp completo.
-                    effectiveBookingEndDateTime = booking.getEndDate();
-                    if (effectiveBookingEndDateTime == null && booking.getStartDate() != null && booking.getEndHour() != null) {
-
-                        log.warn("Booking PER_HOUR ID {} tiene endDate nulo, usando fallback con startDate y endHour.", booking.getId());
-                        effectiveBookingEndDateTime = LocalDateTime.of(booking.getStartDate().toLocalDate(), booking.getEndHour());
-                    }
+                    // Completar si la hora actual es posterior a la hora de fin
+                    LocalDateTime bookingEndDateTime = booking.getStartDate()
+                            .withHour(booking.getEndHour().getHour())
+                            .withMinute(booking.getEndHour().getMinute());
+                    shouldComplete = now.isAfter(bookingEndDateTime);
                     break;
+
                 case PER_DAY:
-                    effectiveBookingEndDateTime = booking.getStartDate().toLocalDate().plusDays(1).atStartOfDay();
+                    // Completar si la fecha actual es posterior al día de la reserva
+                    LocalDateTime endOfBookingDay = booking.getStartDate()
+                            .plusDays(1)
+                            .withHour(0)
+                            .withMinute(0)
+                            .withSecond(0);
+                    shouldComplete = now.isAfter(endOfBookingDay);
                     break;
-                case PER_MONTH:
-                    effectiveBookingEndDateTime = booking.getEndDate();
-                    break;
-                default:
-                    log.warn("Tipo de reserva desconocido {} para booking ID {}", booking.getBookingType(), booking.getId());
-                    continue;
-            }
 
-            if (effectiveBookingEndDateTime != null) {
-                if (nowInBuenosAires.isAfter(effectiveBookingEndDateTime)) {
-                    log.info("Completando Booking ID: {} (effectiveEnd: {})", booking.getId(), effectiveBookingEndDateTime);
-                    shouldComplete = true;
-                }
-            } else {
-                log.warn("No se pudo determinar effectiveBookingEndDateTime para Booking ID {}", booking.getId());
+                case PER_MONTH:
+                    // Completar si la fecha actual es posterior a la fecha de fin
+                    shouldComplete = booking.getEndDate() != null && now.isAfter(booking.getEndDate());
+                    break;
             }
 
             if (shouldComplete) {
                 booking.setStatus(BookingStatus.COMPLETED);
                 booking.setActive(false);
+
                 SpaceEntity space = booking.getSpace();
                 space.setAvailable(true);
                 spaceRepository.save(space);
-                bookingsToSave.add(booking);
 
-                     mailService.sendBookingCompletedEmail(
-                         booking.getUser().getEmail(),
-                         booking.getUser().getName(),
-                         booking.getSpace().getName()
-                     );
+                mailService.sendBookingCompletedEmail(
+                        booking.getUser().getEmail(),
+                        booking.getUser().getName(),
+                        booking.getSpace().getName()
+                );
             }
         }
 
-        if (!bookingsToSave.isEmpty()) {
-            bookingRepository.saveAll(bookingsToSave);
-            log.debug("Guardadas {} modificaciones de reservas.", bookingsToSave.size());
-        }
+        bookingRepository.saveAll(upcomingBookings);
+        bookingRepository.saveAll(activeBookings);
     }
+
     @Override
     public Page<BookingResponseDto> getUserBookings(String uid, BookingStatus status, Pageable pageable) {
         Page<BookingEntity> bookingsPage = bookingRepository
