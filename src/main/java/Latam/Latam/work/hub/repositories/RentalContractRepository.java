@@ -87,8 +87,6 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
             ContractStatus status,
             boolean depositRefunded);
 
-<<<<<<< Updated upstream
-=======
     @Query("SELECT c FROM RentalContractEntity c " +
             "WHERE c.autoRenewal = true " +
             "AND c.contractStatus = 'ACTIVE' " +
@@ -140,5 +138,4 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
                                                                @Param("activeStatus") ContractStatus activeStatus,
                                                                Pageable pageable
     );
->>>>>>> Stashed changes
 }
