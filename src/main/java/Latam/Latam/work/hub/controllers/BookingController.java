@@ -57,4 +57,11 @@ public class BookingController {
         Page<BookingResponseDto> bookings = bookingService.getUserBookings(uid, status, pageable);
         return ResponseEntity.ok(bookings);
     }
+
+    @PostMapping("/bookings/{bookingId}/payment")
+    @PreAuthorize("hasRole('CLIENTE')")
+    public ResponseEntity<String> generateBookingPaymentLink(@PathVariable Long bookingId) {
+        String paymentUrl = bookingService.generateBookingPaymentLink(bookingId);
+        return ResponseEntity.ok(paymentUrl);
+    }
 }

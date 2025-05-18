@@ -11,8 +11,11 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -43,6 +46,9 @@ public class RentalContractEntity implements Billable {
     @Column(name = "deposit_amount")
     private Double depositAmount;
 
+    @Column(name = "deposit_refunded_amount")
+    private Double depositRefundedAmount;
+
     @Column(name = "auto_renewal")
     private boolean autoRenewal = false;
 
@@ -65,10 +71,30 @@ public class RentalContractEntity implements Billable {
     private UserEntity tenant ;
 
     @Column(name = "deposit_refounded")
-    private boolean depositRefounded = false;
+    private Boolean depositRefounded = false;
 
     @Column(name = "deposit_refound_date")
     private LocalDateTime depositRefoundDate;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Version
+    private Long version;
+
+    @PrePersist
+    protected void onCreate() {
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
+    }
 
     @Transient
     private Double amount;

@@ -20,7 +20,6 @@ public interface MailService {
     void sendOwnerContractRenewalNotification(String ownerEmail, String ownerName, String spaceName, String tenantName, String months, String newEndDate);
     void sendRentalPaymentConfirmation(String tenantEmail, String tenantName, String spaceName, String invoiceNumber, String paymentDate, String amount);
 
-
     void sendUpcomingAutoRenewalNotification(String tenantEmail, String tenantName, String spaceName,
                                              String endDate, String renewalMonths);
     void sendAutoRenewalSetupNotification(String tenantEmail, String tenantName, String spaceName,
@@ -33,4 +32,12 @@ public interface MailService {
     void sendOwnerOverdueInvoiceNotification(String email, String ownerName,
                                              String spaceName, String tenantName,
                                              String amount, String dueDate);
+
+
+    void sendOwnerAndTenantAutoRenewalNotification(
+            String tenantEmail,
+            String ownerEmail,
+            String spaceName,
+            Boolean isAutoRenewal
+    );
 }

@@ -34,6 +34,9 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -120,6 +123,14 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                     .build();
 
             String notificationUrl = BACK_URL + "/api/payments/notifications/" + invoiceId;
+            OffsetDateTime expirationDateFrom = LocalDateTime.now()
+                    .atZone(ZoneId.systemDefault())
+                    .toOffsetDateTime();
+
+            OffsetDateTime expirationDateTo = LocalDateTime.now()
+                    .plusHours(24)
+                    .atZone(ZoneId.systemDefault())
+                    .toOffsetDateTime();
 
             PreferenceRequest preferenceRequest = PreferenceRequest.builder()
                     .items(items)
@@ -127,6 +138,9 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                     .backUrls(backUrls)
                     .notificationUrl(notificationUrl)
                     .externalReference("INVOICE-" + invoiceId)
+                    .expires(true)
+                    .expirationDateFrom(expirationDateFrom)
+                    .expirationDateTo(expirationDateTo)
                     .metadata(metadata)
                     .autoReturn("approved")
                     .build();
@@ -142,76 +156,97 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
             throw e;
         }
     }
-
     @Override
     @Transactional
     public String receiveNotification(String topic, String resource, Long invoiceId) throws MPException, MPApiException {
-        if ("merchant_order".equalsIgnoreCase(topic) && resource != null) {
+        try {
+            if (!"merchant_order".equalsIgnoreCase(topic) || resource == null) {
+                return "Notificación ignorada: tipo no soportado";
+            }
+
             String[] resourceParts = resource.split("/");
+            if (resourceParts.length == 0) {
+                return "Recurso inválido";
+            }
+
             Long merchantOrderId = Long.valueOf(resourceParts[resourceParts.length - 1]);
             MerchantOrder merchantOrder = this.merchantOrderClient.get(merchantOrderId);
 
-            if ("paid".equalsIgnoreCase(merchantOrder.getOrderStatus())) {
-                InvoiceEntity invoiceEntity = this.invoiceRepository.findById(invoiceId)
-                        .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
-
-                // Obtener el paymentId del MerchantOrder
-                Long paymentId = merchantOrder.getPayments().get(0).getId();
-
-                // Actualizar estado de la factura y asignar el paymentId
-                invoiceEntity.setStatus(InvoiceStatus.PAID);
-                invoiceEntity.setPaymentId(paymentId);
-                this.invoiceRepository.save(invoiceEntity);
-
-                // Handle different invoice types based on the related entity
-                if (invoiceEntity.getBooking() != null) {
-                    // Confirmar la reserva
-                    bookingService.confirmBookingPayment(invoiceEntity.getBooking().getId());
-
-                    // Enviar email de confirmación al cliente
-                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-                    String formattedDate = invoiceEntity.getIssueDate().format(formatter);
-
-                    this.mailService.sendPaymentConfirmationEmail(
-                            invoiceEntity.getBooking().getUser().getEmail(),
-                            invoiceEntity.getBooking().getUser().getName(),
-                            invoiceEntity.getBooking().getSpace().getName(),
-                            formattedDate,
-                            invoiceEntity.getTotalAmount());
-                }
-                else if (invoiceEntity.getRentalContract() != null) {
-                    // Handle rental contract payment
-                    RentalContractEntity contract = invoiceEntity.getRentalContract();
-
-                    // For initial payment, activate the contract
-                    if (contract.getContractStatus() == ContractStatus.PENDING) {
-                        contract.setContractStatus(ContractStatus.ACTIVE);
-                        rentalContractRepository.save(contract);
-
-                        // Mark space as unavailable
-                        SpaceEntity space = contract.getSpace();
-                        space.setAvailable(false);
-                        spaceRepository.save(space);
-                    }
-
-                    // Send single payment confirmation email
-                    UserEntity tenant = contract.getTenant();
-                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-
-                    mailService.sendRentalPaymentConfirmation(
-                            tenant.getEmail(),
-                            tenant.getName(),
-                            contract.getSpace().getName(),
-                            invoiceEntity.getInvoiceNumber(),
-                            invoiceEntity.getIssueDate().format(formatter),
-                            invoiceEntity.getTotalAmount().toString()
-                    );
-                }
+            if (!"paid".equalsIgnoreCase(merchantOrder.getOrderStatus())) {
+                return "Orden no pagada";
             }
+
+            if (merchantOrder.getPayments() == null || merchantOrder.getPayments().isEmpty()) {
+                throw new RuntimeException("No se encontraron pagos en la orden");
+            }
+
+            InvoiceEntity invoiceEntity = this.invoiceRepository.findById(invoiceId)
+                    .orElseThrow(() -> new EntityNotFoundException("Factura no encontrada: " + invoiceId));
+
+            // Verificar si la factura ya está procesada
+            if (invoiceEntity.getStatus() == InvoiceStatus.PAID) {
+                return "Factura ya procesada";
+            }
+
+            Long paymentId = merchantOrder.getPayments().get(0).getId();
+            invoiceEntity.setStatus(InvoiceStatus.PAID);
+            invoiceEntity.setPaymentId(paymentId);
+            this.invoiceRepository.save(invoiceEntity);
+
+            // Procesar según el tipo de factura
+            if (invoiceEntity.getBooking() != null) {
+                processBookingPayment(invoiceEntity);
+            } else if (invoiceEntity.getRentalContract() != null) {
+                processRentalContractPayment(invoiceEntity);
+            }
+
+            return "Notificación procesada exitosamente";
+        } catch (Exception e) {            // Log del error
+            throw new RuntimeException("Error procesando notificación: " + e.getMessage(), e);
         }
-        return "Notification Recibida";
     }
 
+    private void processBookingPayment(InvoiceEntity invoiceEntity) {
+        BookingEntity booking = invoiceEntity.getBooking();
+        bookingService.confirmBookingPayment(booking.getId());
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        String formattedDate = invoiceEntity.getIssueDate().format(formatter);
+        SpaceEntity space = invoiceEntity.getBooking().getSpace();
+        space.setAvailable(false);
+        spaceRepository.save(space);
+        this.mailService.sendPaymentConfirmationEmail(
+                booking.getUser().getEmail(),
+                booking.getUser().getName(),
+                booking.getSpace().getName(),
+                formattedDate,
+                invoiceEntity.getTotalAmount());
+    }
+
+    private void processRentalContractPayment(InvoiceEntity invoiceEntity) {
+        RentalContractEntity contract = invoiceEntity.getRentalContract();
+
+        if (contract.getContractStatus() == ContractStatus.PENDING) {
+            contract.setContractStatus(ContractStatus.ACTIVE);
+            rentalContractRepository.save(contract);
+
+            SpaceEntity space = contract.getSpace();
+            space.setAvailable(false);
+            spaceRepository.save(space);
+        }
+
+        UserEntity tenant = contract.getTenant();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+        mailService.sendRentalPaymentConfirmation(
+                tenant.getEmail(),
+                tenant.getName(),
+                contract.getSpace().getName(),
+                invoiceEntity.getInvoiceNumber(),
+                invoiceEntity.getIssueDate().format(formatter),
+                invoiceEntity.getTotalAmount().toString()
+        );
+    }
 
     @Override
     @Transactional
@@ -249,7 +284,6 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                 // Update booking status
                 BookingEntity booking = invoice.getBooking();
                 booking.setStatus(BookingStatus.CANCELED);
-                booking.setActive(false);
                 bookingRepository.save(booking);
 
                 // Mark the space as available again

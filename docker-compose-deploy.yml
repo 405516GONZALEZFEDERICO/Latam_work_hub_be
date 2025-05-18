@@ -2,13 +2,12 @@ services:
   app:
     container_name: latam-workhub-be
     build:
-        context: .
-        dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      SPRING_DATASOURCE_URL: jdbc:postgresql://ep-proud-pond-a40kf8tv-pooler.us-east-1.aws.neon.tech:5432/latam_workhub_db?sslmode=require
-      SPRING_DATASOURCE_USERNAME: latam_workhub_db_owner
-      SPRING_DATASOURCE_PASSWORD: npg_bdMXqjgv4a1l
+      SPRING_DATASOURCE_URL: jdbc:postgresql://ep-shy-star-a4azbzw7-pooler.us-east-1.aws.neon.tech/db_work_hub?sslmode=require
+      SPRING_DATASOURCE_USERNAME: db_work_hub_owner
+      SPRING_DATASOURCE_PASSWORD: npg_AS1XmgWt8NIe
     ports:
       - "8080:8080"
-

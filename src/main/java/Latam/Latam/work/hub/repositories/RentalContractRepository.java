@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -74,7 +75,8 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
             "AND c.contractStatus = 'ACTIVE'")
     List<RentalContractEntity> findExpiringContracts(@Param("threshold") LocalDate threshold);
 
-    boolean existsBySpaceAndContractStatus(SpaceEntity space, ContractStatus status);
+
+    boolean existsBySpaceAndContractStatusIn(SpaceEntity space, Collection<ContractStatus> statuses);
 
     @Query("SELECT c FROM RentalContractEntity c " +
             "WHERE c.endDate = :endDate " +

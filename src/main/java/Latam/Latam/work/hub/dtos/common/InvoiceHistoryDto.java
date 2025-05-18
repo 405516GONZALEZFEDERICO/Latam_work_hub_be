@@ -18,9 +18,7 @@ public class InvoiceHistoryDto {
     private BigDecimal totalAmount;
     private LocalDateTime issueDate;
     private LocalDateTime dueDate;
-    private LocalDateTime paidDate;
     private InvoiceStatus status;
     private InvoiceType type;
     private String description;
-    private String paymentUrl;
-} 
+}

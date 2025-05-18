@@ -93,26 +93,13 @@ public class ContractScheduler {
         }
     }
 
-    /**
-     * Sincroniza disponibilidad de espacios
-     * Se ejecuta cada 6 horas
-     */
-    @Scheduled(cron = "0 0 */6 * * ?")
-    public void syncSpaceAvailability() {
-        log.info("Sincronizando disponibilidad de espacios");
-        try {
-            rentalContractService.syncSpaceAvailability();
-            log.info("Sincronización de disponibilidad completada");
-        } catch (Exception e) {
-            log.error("Error al sincronizar disponibilidad: {}", e.getMessage(), e);
-        }
-    }
+
 
     /**
      * Verifica contratos terminados y procesa devoluciones de depósitos
      * Se ejecuta cada día a las 4:00 AM
      */
-    @Scheduled(cron = "0 0 4 * * ?")
+    @Scheduled(cron = "0 0 6 * * ?")
     public void processCompletedContractsAndDeposits() {
         log.info("Iniciando verificación de contratos terminados y devoluciones de depósitos");
         try {
@@ -120,6 +107,21 @@ public class ContractScheduler {
             log.info("Procesamiento de contratos terminados y depósitos completado");
         } catch (Exception e) {
             log.error("Error al procesar contratos terminados y depósitos: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Ejecuta las renovaciones automáticas de contratos
+     * Se ejecuta cada día a las 10:30 AM (después de checkAutoRenewals)
+     */
+    @Scheduled(cron = "0 30 10 * * ?")
+    public void executeAutoRenewals() {
+        log.info("Iniciando ejecución de renovaciones automáticas");
+        try {
+            rentalContractService.executeAutoRenewals();
+            log.info("Ejecución de renovaciones automáticas completada con éxito");
+        } catch (Exception e) {
+            log.error("Error al ejecutar renovaciones automáticas: {}", e.getMessage(), e);
         }
     }
 

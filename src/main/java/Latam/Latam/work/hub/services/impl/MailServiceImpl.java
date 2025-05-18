@@ -9,9 +9,12 @@
     import org.springframework.mail.javamail.JavaMailSender;
     import org.springframework.mail.javamail.MimeMessageHelper;
     import org.springframework.stereotype.Service;
+    import org.springframework.ui.freemarker.FreeMarkerTemplateUtils;
     import org.w3c.tidy.Tidy;
 
     import java.math.BigDecimal;
+    import java.util.HashMap;
+    import java.util.Map;
 
     @Service
     @RequiredArgsConstructor
@@ -596,6 +599,66 @@
                 mailSender.send(message);
             } catch (MessagingException e) {
                 throw new RuntimeException("Error al enviar notificación de pago vencido al propietario: " + e.getMessage(), e);
+            }
+        }
+        @Override
+        public void sendOwnerAndTenantAutoRenewalNotification(
+                String tenantEmail,
+                String ownerEmail,
+                String spaceName,
+                Boolean isAutoRenewal
+        ) {
+            String autoRenewalStatus = Boolean.TRUE.equals(isAutoRenewal) ? "activada" : "desactivada";
+
+            String tenantContent = """
+        <html>
+        <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 30px;">
+            <div style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 10px; padding: 20px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
+                <h2 style="color: #2c3e50;">Actualización de Renovación Automática</h2>
+                <p style="font-size: 16px;">Hola,</p>
+                <p style="font-size: 16px;">Te informamos que la renovación automática del espacio <strong>%s</strong> ha sido <strong>%s</strong>.</p>
+                <p style="font-size: 15px;">Si tienes alguna duda, no dudes en contactarnos.</p>
+                <p style="font-size: 14px; color: #555;">El equipo de <strong>LATAM Work Hub</strong></p>
+            </div>
+        </body>
+        </html>
+    """.formatted(spaceName, autoRenewalStatus);
+
+            String ownerContent = """
+        <html>
+        <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 30px;">
+            <div style="max-width: 600px; margin: auto; background-color: #ffffff; border-radius: 10px; padding: 20px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);">
+                <h2 style="color: #2c3e50;">Actualización de Renovación Automática</h2>
+                <p style="font-size: 16px;">Hola,</p>
+                <p style="font-size: 16px;">Te notificamos que la renovación automática del espacio <strong>%s</strong> ha sido <strong>%s</strong> por el inquilino.</p>
+                <p style="font-size: 15px;">Podés revisar los detalles en tu panel de administración.</p>
+                <p style="font-size: 14px; color: #555;">El equipo de <strong>LATAM Work Hub</strong></p>
+            </div>
+        </body>
+        </html>
+    """.formatted(spaceName, autoRenewalStatus);
+
+            try {
+                sendEmail(tenantEmail, "Actualización de Renovación Automática", tenantContent);
+                sendEmail(ownerEmail, "Actualización de Renovación Automática", ownerContent);
+            } catch (Exception e) {
+                throw new RuntimeException("Error al enviar correos de notificación");
+            }
+        }
+
+        private void sendEmail(String to, String subject, String content) {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+
+            try {
+                MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+                helper.setFrom(EMAIL_FROM);
+                helper.setTo(to);
+                helper.setSubject(subject);
+                helper.setText(content, true); // true para HTML
+
+                mailSender.send(mimeMessage);
+            } catch (MessagingException e) {
+                throw new RuntimeException("No se pudo enviar el correo");
             }
         }
 

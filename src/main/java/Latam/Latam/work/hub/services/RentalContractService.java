@@ -1,7 +1,6 @@
 package Latam.Latam.work.hub.services;
 
 import Latam.Latam.work.hub.dtos.common.*;
-import Latam.Latam.work.hub.entities.InvoiceEntity;
 import Latam.Latam.work.hub.enums.ContractStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,14 +19,8 @@ public interface RentalContractService {
      * @return URL para realizar el pago inicial
      */
     String createRentalContract(RentalContractDto contractDto);
-
-    /**
-     * Obtiene todos los contratos de un usuario por su UID de Firebase
-     * @param uid UID de Firebase del usuario
-     * @return Lista de contratos
-     */
-//    List<RentalContractResponseDto> getUserContracts(String uid);
-
+    isAutoRenewalDto isAutoRenewal(Long  contractId);
+    Boolean updateIsAutoRenewal(Long contractId, Boolean isAutoRenewal);
     /**
      * Obtiene las facturas pendientes de un contrato
      * @param contractId ID del contrato
@@ -42,12 +35,6 @@ public interface RentalContractService {
      */
     String generateCurrentInvoicePaymentLink(Long contractId);
 
-    /**
-     * Obtiene el historial de cambios de estado de un contrato
-     * @param contractId ID del contrato
-     * @return Lista de cambios de estado
-     */
-    List<ContractStateChangeDto> getContractHistory(Long contractId);
 
     /**
      * Obtiene el historial completo de facturas de un contrato
@@ -77,9 +64,9 @@ public interface RentalContractService {
      */
     String renewContract(Long contractId, Integer months);
     void processAutoRenewals();
-    void syncSpaceAvailability();
     void updateSpaceStatuses();
     void processExpiringContracts();
+    void executeAutoRenewals();
 
 
 

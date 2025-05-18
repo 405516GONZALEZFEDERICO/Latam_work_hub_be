@@ -42,6 +42,7 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
             @Param("initHour") LocalTime initHour,
             @Param("endHour") LocalTime endHour);
 
+    List<BookingEntity> findByStatus(BookingStatus status);
     /**
      * Busca reservas confirmadas cuya fecha de inicio ha llegado o está cerca
      */
