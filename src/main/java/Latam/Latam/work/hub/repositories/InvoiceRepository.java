@@ -1,7 +1,11 @@
 package Latam.Latam.work.hub.repositories;
 
+import Latam.Latam.work.hub.dtos.common.reports.admin.InvoiceReportRowDto;
+import Latam.Latam.work.hub.dtos.common.reports.admin.OverdueInvoiceAlertDto;
 import Latam.Latam.work.hub.entities.InvoiceEntity;
 import Latam.Latam.work.hub.enums.InvoiceStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -87,4 +91,90 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
             @Param("contractId") Long contractId,
             @Param("status") InvoiceStatus status
     );
+
+
+    @Query("SELECT bk.space.id AS spaceId, SUM(inv.totalAmount) AS totalRevenue " +
+            "FROM InvoiceEntity inv JOIN inv.booking bk " +
+            "WHERE bk.space.id IN :spaceIds AND inv.status = :status " +
+            "  AND (:startDate IS NULL OR inv.issueDate >= :startDate) " +
+            "  AND (:endDate IS NULL OR inv.issueDate <= :endDate) " +
+            "GROUP BY bk.space.id")
+    List<Object[]> sumRevenueForSpacesFromBookingsInPeriod(
+            @Param("spaceIds") List<Long> spaceIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("status") InvoiceStatus status
+    );
+
+    @Query("SELECT rc_entity.space.id AS spaceId, SUM(inv.totalAmount) AS totalRevenue " + // Cambiado rc a rc_entity para evitar conflicto con el alias 'rc' de la entidad
+            "FROM InvoiceEntity inv JOIN inv.rentalContract rc_entity " + // rc_entity es RentalContractEntity
+            "WHERE rc_entity.space.id IN :spaceIds AND inv.status = :status " +
+            "  AND (:startDate IS NULL OR inv.issueDate >= :startDate) " +
+            "  AND (:endDate IS NULL OR inv.issueDate <= :endDate) " +
+            "GROUP BY rc_entity.space.id")
+    List<Object[]> sumRevenueForSpacesFromContractsInPeriod(
+            @Param("spaceIds") List<Long> spaceIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("status") InvoiceStatus status
+    );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // Query principal simplificada
+    @Query(value = "SELECT i " +
+            "FROM InvoiceEntity i " +
+            "LEFT JOIN FETCH i.booking b LEFT JOIN FETCH b.user bc " + // Cliente de booking
+            "LEFT JOIN FETCH i.rentalContract rcontract LEFT JOIN FETCH rcontract.tenant rct " + // Cliente de contrato
+            "WHERE ((:filterStartDate IS NULL AND :filterEndDate IS NULL) " +
+            "    OR (i.issueDate >= :filterStartDate AND i.issueDate <= :filterEndDate)) " +
+            "AND (:clientId IS NULL OR bc.id = :clientId OR rct.id = :clientId) " + // Filtro de cliente
+            "AND (:invoiceStatusEnum IS NULL OR i.status = :invoiceStatusEnum)",
+            countQuery = "SELECT COUNT(i) FROM InvoiceEntity i " +
+                    "LEFT JOIN i.booking b LEFT JOIN b.user bc " +
+                    "LEFT JOIN i.rentalContract rcontract LEFT JOIN rcontract.tenant rct " +
+                    "WHERE ((:filterStartDate IS NULL AND :filterEndDate IS NULL) " +
+                    "    OR (i.issueDate >= :filterStartDate AND i.issueDate <= :filterEndDate)) " +
+                    "AND (:clientId IS NULL OR bc.id = :clientId OR rct.id = :clientId) " +
+                    "AND (:invoiceStatusEnum IS NULL OR i.status = :invoiceStatusEnum)")
+    Page<InvoiceEntity> findInvoicesForReport( // Devuelve Entidades
+                                               @Param("filterStartDate") LocalDateTime filterStartDate,
+                                               @Param("filterEndDate") LocalDateTime filterEndDate,
+                                               @Param("clientId") Long clientId,
+                                               @Param("invoiceStatusEnum") InvoiceStatus invoiceStatusEnum,
+                                               Pageable pageable
+    );
+
+    // Query para Alertas simplificada
+    @Query(value = "SELECT i " +
+            "FROM InvoiceEntity i " +
+            "LEFT JOIN FETCH i.booking b LEFT JOIN FETCH b.user bc " +
+            "LEFT JOIN FETCH i.rentalContract rcontract LEFT JOIN FETCH rcontract.tenant rct " +
+            "WHERE i.status IN :statuses " +
+            "AND i.dueDate < :overdueThresholdDate",
+            countQuery = "SELECT COUNT(i) FROM InvoiceEntity i " +
+                    "WHERE i.status IN :statuses " +
+                    "AND i.dueDate < :overdueThresholdDate")
+    Page<InvoiceEntity> findOverdueInvoicesForAlerts( // Devuelve Entidades
+                                                      @Param("overdueThresholdDate") LocalDateTime overdueThresholdDate,
+                                                      @Param("statuses") List<InvoiceStatus> statuses,
+                                                      Pageable pageable
+    );
+
+
+
 }

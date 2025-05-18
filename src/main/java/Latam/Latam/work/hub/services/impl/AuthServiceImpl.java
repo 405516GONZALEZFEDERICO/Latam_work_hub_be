@@ -95,14 +95,31 @@ public class AuthServiceImpl implements AuthService {
         }
 
         try {
+            // Validar que el usuario exista en la base de datos
             userService.validateUserExists(email);
 
+            // Realizar el inicio de sesión con Firebase
             Map<String, Object> responseBody = authRestService.signInWithEmailAndPassword(email, password);
 
             String idToken = (String) responseBody.get("idToken");
             String refreshToken = (String) responseBody.get("refreshToken");
             String uid = (String) responseBody.get("localId");
 
+            // Consultar el rol del usuario desde la base de datos
+            String userRole = String.valueOf(userRepository.getUserRoleByEmail(email)); // Método que debes implementar en UserService
+
+            // Si el rol es ADMIN, omitir la verificación con Firebase
+            if ("ADMIN".equalsIgnoreCase(userRole)) {
+                return AuthResponseDto.builder()
+                        .idToken(idToken)
+                        .refreshToken(refreshToken)
+                        .expiresIn((String) responseBody.get("expiresIn"))
+                        .role("ADMIN")
+                        .firebaseUid(uid)
+                        .build();
+            }
+
+            // Verificar el rol con Firebase para otros usuarios
             FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRol(idToken);
 
             return AuthResponseDto.builder()

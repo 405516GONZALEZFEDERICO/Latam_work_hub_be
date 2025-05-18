@@ -1,5 +1,6 @@
 package Latam.Latam.work.hub.repositories;
 
+import Latam.Latam.work.hub.dtos.common.reports.admin.BookingReportRowDto;
 import Latam.Latam.work.hub.entities.BookingEntity;
 import Latam.Latam.work.hub.enums.BookingStatus;
 import org.springframework.data.domain.Page;
@@ -66,4 +67,54 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
             @Param("uid") String uid,
             @Param("status") BookingStatus status,
             Pageable pageable);
+
+
+    @Query("SELECT b.space.id AS spaceId, COUNT(b.id) AS count " +
+            "FROM BookingEntity b " +
+            "WHERE b.space.id IN :spaceIds AND b.status = :status " +
+            "  AND (:startDate IS NULL OR b.startDate >= :startDate) " +
+            "  AND (:endDate IS NULL OR b.startDate <= :endDate) " +
+            "GROUP BY b.space.id")
+    List<Object[]> countBookingsForSpacesInPeriod(
+            @Param("spaceIds") List<Long> spaceIds,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("status") BookingStatus status
+    );
+
+
+
+
+    // Query principal simplificada
+    @Query(value = "SELECT b " +
+            "FROM BookingEntity b " +
+            "JOIN FETCH b.space s " +
+            "JOIN FETCH b.user c " + // b.user es el cliente
+            "JOIN FETCH s.owner p " + // s.owner es el proveedor del espacio
+            "WHERE (:startDateParam IS NULL OR b.startDate >= :startDateParam) " +
+            "AND (:endDateParam IS NULL OR b.startDate <= :endDateParam) " + // Ajustar si el filtro es sobre b.endDate
+            "AND (:clientIdParam IS NULL OR c.id = :clientIdParam) " +
+            "AND (:providerIdParam IS NULL OR p.id = :providerIdParam) " +
+            "AND (:spaceIdParam IS NULL OR s.id = :spaceIdParam) " +
+            "AND (:bookingStatusEnum IS NULL OR b.status = :bookingStatusEnum)",
+            countQuery = "SELECT COUNT(b) FROM BookingEntity b JOIN b.space s JOIN b.user c JOIN s.owner p " +
+                    "WHERE (:startDateParam IS NULL OR b.startDate >= :startDateParam) " +
+                    "AND (:endDateParam IS NULL OR b.startDate <= :endDateParam) " +
+                    "AND (:clientIdParam IS NULL OR c.id = :clientIdParam) " +
+                    "AND (:providerIdParam IS NULL OR p.id = :providerIdParam) " +
+                    "AND (:spaceIdParam IS NULL OR s.id = :spaceIdParam) " +
+                    "AND (:bookingStatusEnum IS NULL OR b.status = :bookingStatusEnum)")
+    Page<BookingEntity> findBookingsForReport( // Devuelve Entidades
+                                               @Param("startDateParam") LocalDateTime startDateParam,
+                                               @Param("endDateParam") LocalDateTime endDateParam,
+                                               @Param("clientIdParam") Long clientIdParam,
+                                               @Param("providerIdParam") Long providerIdParam,
+                                               @Param("spaceIdParam") Long spaceIdParam,
+                                               @Param("bookingStatusEnum") BookingStatus bookingStatusEnum,
+                                               Pageable pageable
+    );
+
+
+
+
 }

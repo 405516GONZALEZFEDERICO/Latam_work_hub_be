@@ -1,5 +1,7 @@
 package Latam.Latam.work.hub.repositories;
 
+import Latam.Latam.work.hub.dtos.common.reports.admin.ContractReportRowDto;
+import Latam.Latam.work.hub.dtos.common.reports.admin.ExpiringContractAlertDto;
 import Latam.Latam.work.hub.entities.RentalContractEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
 import Latam.Latam.work.hub.enums.ContractStatus;
@@ -83,4 +85,58 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
             ContractStatus status,
             boolean depositRefunded);
 
+<<<<<<< Updated upstream
+=======
+    @Query("SELECT c FROM RentalContractEntity c " +
+            "WHERE c.autoRenewal = true " +
+            "AND c.contractStatus = 'ACTIVE' " +
+            "AND c.endDate BETWEEN :today AND :threshold")
+    List<RentalContractEntity> findContractsForAutoRenewalExecution(
+            LocalDate today,
+            LocalDate threshold);
+
+
+    // Query principal simplificada
+    @Query(value = "SELECT rc " +
+            "FROM RentalContractEntity rc " +
+            "JOIN FETCH rc.space s " +
+            "JOIN FETCH rc.tenant t " +
+            "JOIN FETCH s.owner own " + // Propietario desde s.owner
+            "WHERE (:filterStartDate IS NULL OR rc.endDate >= :filterStartDate) " +
+            "AND (:filterEndDate IS NULL OR rc.startDate <= :filterEndDate) " +
+            "AND (:tenantId IS NULL OR t.id = :tenantId) " +
+            "AND (:ownerId IS NULL OR own.id = :ownerId) " +
+            "AND (:contractStatusEnum IS NULL OR rc.contractStatus = :contractStatusEnum)",
+            countQuery = "SELECT COUNT(rc) FROM RentalContractEntity rc JOIN rc.space s JOIN rc.tenant t JOIN s.owner own " +
+                    "WHERE (:filterStartDate IS NULL OR rc.endDate >= :filterStartDate) " +
+                    "AND (:filterEndDate IS NULL OR rc.startDate <= :filterEndDate) " +
+                    "AND (:tenantId IS NULL OR t.id = :tenantId) " +
+                    "AND (:ownerId IS NULL OR own.id = :ownerId) " +
+                    "AND (:contractStatusEnum IS NULL OR rc.contractStatus = :contractStatusEnum)")
+    Page<RentalContractEntity> findContractsForReport( // Devuelve Entidades
+                                                       @Param("filterStartDate") LocalDate filterStartDate,
+                                                       @Param("filterEndDate") LocalDate filterEndDate,
+                                                       @Param("tenantId") Long tenantId,
+                                                       @Param("ownerId") Long ownerId,
+                                                       @Param("contractStatusEnum") ContractStatus contractStatusEnum,
+                                                       Pageable pageable
+    );
+
+    // Query para Alertas simplificada
+    @Query(value = "SELECT rc " +
+            "FROM RentalContractEntity rc " +
+            "JOIN FETCH rc.space s " +
+            "JOIN FETCH rc.tenant t " +
+            "WHERE rc.contractStatus = :activeStatus " +
+            "AND rc.endDate BETWEEN :today AND :expiryLimitDate",
+            countQuery = "SELECT COUNT(rc) FROM RentalContractEntity rc " + // No necesita todos los JOINs para el count
+                    "WHERE rc.contractStatus = :activeStatus " +
+                    "AND rc.endDate BETWEEN :today AND :expiryLimitDate")
+    Page<RentalContractEntity> findExpiringContractsForAlerts( // Devuelve Entidades
+                                                               @Param("today") LocalDate today,
+                                                               @Param("expiryLimitDate") LocalDate expiryLimitDate,
+                                                               @Param("activeStatus") ContractStatus activeStatus,
+                                                               Pageable pageable
+    );
+>>>>>>> Stashed changes
 }

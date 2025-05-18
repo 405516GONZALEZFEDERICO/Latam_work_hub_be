@@ -1,11 +1,15 @@
 package Latam.Latam.work.hub.repositories;
 import Latam.Latam.work.hub.entities.SpaceEntity;
+import Latam.Latam.work.hub.enums.BookingStatus;
+import Latam.Latam.work.hub.enums.InvoiceStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -80,5 +84,30 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
             Pageable pageable
     );
 
+    @Query("SELECT COUNT(s) FROM SpaceEntity s WHERE s.active = true AND s.available = true AND s.deleted = false")
+    long countByActiveTrueAndAvailableTrueAndDeletedFalse();
+
+    @Query(value = "SELECT s " +
+            "FROM SpaceEntity s JOIN FETCH s.owner ow " +
+            "WHERE s.deleted = false " +
+            "AND (:providerId IS NULL OR ow.id = :providerId) " +
+            "AND (:spaceStatusParam IS NULL " +
+            "   OR (:spaceStatusParam = 'Disponible' AND s.active = true AND s.available = true AND s.deleted = false) " +
+            "   OR (:spaceStatusParam = 'Ocupado' AND s.active = true AND s.available = false AND s.deleted = false) " +
+            "   OR (:spaceStatusParam = 'Inactivo' AND s.active = false)" +
+            ")",
+            countQuery = "SELECT COUNT(s) FROM SpaceEntity s JOIN s.owner ow " +
+                    "WHERE s.deleted = false " +
+                    "AND (:providerId IS NULL OR ow.id = :providerId) " +
+                    "AND (:spaceStatusParam IS NULL " +
+                    "   OR (:spaceStatusParam = 'Disponible' AND s.active = true AND s.available = true AND s.deleted = false) " +
+                    "   OR (:spaceStatusParam = 'Ocupado' AND s.active = true AND s.available = false AND s.deleted = false) " +
+                    "   OR (:spaceStatusParam = 'Inactivo' AND s.active = false)" +
+                    ")")
+    Page<SpaceEntity> findSpacesForReportPage(
+            @Param("providerId") Long providerId,
+            @Param("spaceStatusParam") String spaceStatusParam,
+            Pageable pageable
+    );
 
 }

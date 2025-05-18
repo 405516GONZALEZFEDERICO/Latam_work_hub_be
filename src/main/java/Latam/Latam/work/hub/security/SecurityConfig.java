@@ -34,7 +34,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/users/get-personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/users/*/get-provider-type").hasRole("PROVEEDOR")
                         .requestMatchers("/api/booking/**").hasRole("CLIENTE")
-                        .requestMatchers("api/rental-contracts/**").hasRole("CLIENTE")
+                        .requestMatchers("/api/rental-contracts/**").hasRole("CLIENTE")
                         .requestMatchers("/api/payments/**").hasRole("CLIENTE")
                         .requestMatchers("/api/location/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/company/*").hasAnyRole("CLIENTE", "PROVEEDOR")
@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/spaces/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/spaces/provider/spaces").hasRole("PROVEEDOR")
                         .requestMatchers("/api/amenities/*").hasAnyRole("CLIENTE", "PROVEEDOR")
+//                        .requestMatchers("/api/reports/full-summary").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(firebaseAuthFilter, UsernamePasswordAuthenticationFilter.class);
