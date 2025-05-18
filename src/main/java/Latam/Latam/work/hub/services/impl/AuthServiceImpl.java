@@ -82,7 +82,6 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-
     @Override
     @Transactional
     public AuthResponseDto login(String email, String password) {
@@ -98,37 +97,37 @@ public class AuthServiceImpl implements AuthService {
             // Validar que el usuario exista en la base de datos
             userService.validateUserExists(email);
 
-            // Realizar el inicio de sesión con Firebase
-            Map<String, Object> responseBody = authRestService.signInWithEmailAndPassword(email, password);
+            UserEntity user = userRepository.findByEmail(email)
+                    .orElseThrow(() -> new AuthException("Usuario no encontrado"));
 
-            String idToken = (String) responseBody.get("idToken");
-            String refreshToken = (String) responseBody.get("refreshToken");
-            String uid = (String) responseBody.get("localId");
+            String userRole = user.getRole().getName();
 
-            // Consultar el rol del usuario desde la base de datos
-            String userRole = String.valueOf(userRepository.getUserRoleByEmail(email)); // Método que debes implementar en UserService
 
-            // Si el rol es ADMIN, omitir la verificación con Firebase
+            // Si el rol es ADMIN, realizar login sin verificación Firebase
             if ("ADMIN".equalsIgnoreCase(userRole)) {
+                Map<String, Object> responseBody = authRestService.signInWithEmailAndPassword(email, password);
                 return AuthResponseDto.builder()
-                        .idToken(idToken)
-                        .refreshToken(refreshToken)
+                        .idToken((String) responseBody.get("idToken"))
+                        .refreshToken((String) responseBody.get("refreshToken"))
                         .expiresIn((String) responseBody.get("expiresIn"))
                         .role("ADMIN")
-                        .firebaseUid(uid)
+                        .firebaseUid((String) responseBody.get("localId"))
                         .build();
             }
 
-            // Verificar el rol con Firebase para otros usuarios
+            // Para otros roles, realizar verificación completa con Firebase
+            Map<String, Object> responseBody = authRestService.signInWithEmailAndPassword(email, password);
+            String idToken = (String) responseBody.get("idToken");
             FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRol(idToken);
 
             return AuthResponseDto.builder()
                     .idToken(idToken)
-                    .refreshToken(refreshToken)
+                    .refreshToken((String) responseBody.get("refreshToken"))
                     .expiresIn((String) responseBody.get("expiresIn"))
                     .role(userInfo.getRole())
-                    .firebaseUid(uid)
+                    .firebaseUid((String) responseBody.get("localId"))
                     .build();
+
         } catch (AuthException e) {
             throw e;
         } catch (FirebaseAuthException e) {

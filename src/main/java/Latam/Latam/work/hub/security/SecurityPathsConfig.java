@@ -19,7 +19,7 @@ public class SecurityPathsConfig {
             "/swagger-ui/**",
             "/v3/api-docs/**",
             "/api/payments/notifications/**",
-            "/api/reports/full-summary"
+            "/api/reports/**"
     );
 
     public boolean isPublicPath(String path) {

@@ -37,12 +37,6 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
     List<InvoiceEntity> findByDueDateBeforeAndPaidFalse(LocalDate date);
 
     /**
-     * Busca factura por número de factura
-     */
-    Optional<InvoiceEntity> findByInvoiceNumber(String invoiceNumber);
-
-
-    /**
      * Busca facturas por ID de contrato de alquiler
      */
     @Query("SELECT i FROM InvoiceEntity i WHERE i.rentalContract.id = :contractId " +
@@ -75,12 +69,6 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
             "AND (i.status = 'DRAFT' OR i.status = 'ISSUED')")
     List<InvoiceEntity> findInvoicesExpiringOn(@Param("dueDate") LocalDate dueDate);
 
-    /**
-     * Busca facturas vencidas (pasaron la fecha de vencimiento pero no están pagadas)
-     */
-    @Query("SELECT i FROM InvoiceEntity i WHERE i.dueDate < :currentDate AND " +
-            "(i.status = 'DRAFT' OR i.status = 'ISSUED')")
-    List<InvoiceEntity> findOverdueInvoices(@Param("currentDate") LocalDateTime currentDate);
 
 
     /**
@@ -175,6 +163,14 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
                                                       Pageable pageable
     );
 
-
+    @Query("SELECT COALESCE(SUM(i.totalAmount), 0.0) FROM InvoiceEntity i " +
+            "WHERE i.status = :status " +
+            "AND i.issueDate BETWEEN :startDate AND :endDate " +
+            "AND (i.booking IS NOT NULL OR i.rentalContract IS NOT NULL)")
+    Double sumTotalAmountByStatusAndDateRange(
+            @Param("status") InvoiceStatus status,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 
 }

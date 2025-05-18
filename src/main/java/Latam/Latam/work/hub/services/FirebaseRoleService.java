@@ -12,5 +12,7 @@ public interface FirebaseRoleService {
     void createNewUserWithDefaultRole(String uid, String email, String name, String photoUrl);
     void assignRolFirebaseUser(String uid, String rolNombre) throws FirebaseAuthException;
     FirebaseUserExtendedInfoDto getExtendedUserInfo(String idToken);
+    boolean existsByEmailAndRole(String email, String roleName);
+    String getEmailFromToken(String token)throws FirebaseAuthException;
 }
 

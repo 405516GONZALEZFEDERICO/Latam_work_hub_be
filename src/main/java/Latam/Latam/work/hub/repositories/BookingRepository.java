@@ -116,6 +116,11 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
     );
 
 
-
+    @Query("SELECT COUNT(b) FROM BookingEntity b WHERE b.startDate BETWEEN :start AND :end AND b.status = :status")
+    long countByStartDateBetweenAndStatus(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("status") BookingStatus status
+    );
 
 }

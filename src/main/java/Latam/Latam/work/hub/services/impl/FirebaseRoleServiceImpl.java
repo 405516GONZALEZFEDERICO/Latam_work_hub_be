@@ -157,7 +157,47 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
         }
     }
 
+    @Override
+    public boolean existsByEmailAndRole(String email, String roleName) {
+        try {
+            UserEntity user = userRepository.findByEmail(email)
+                    .orElse(null);
 
+            if (user == null) {
+                return false;
+            }
+
+            return user.getRole().getName().equalsIgnoreCase(roleName);
+        } catch (Exception e) {
+            log.error("Error al verificar email y rol: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    @Override
+    public String getEmailFromToken(String token) throws FirebaseAuthException {
+        try {
+            // Decodificar el token para obtener la información del usuario
+            FirebaseToken decodedToken = FirebaseAuth.getInstance().verifyIdToken(token);
+
+            // Obtener el email del token decodificado
+            String email = decodedToken.getEmail();
+
+            // Verificar que el email existe
+            if (email == null || email.isEmpty()) {
+                log.error("Token no contiene email");
+                throw new AuthException("Token inválido: no contiene email");
+            }
+
+            return email;
+        } catch (FirebaseAuthException e) {
+            log.error("Error al verificar token de Firebase: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("Error inesperado al obtener email del token: {}", e.getMessage());
+            throw new AuthException("Error al procesar el token");
+        }
+    }
 
 
 }

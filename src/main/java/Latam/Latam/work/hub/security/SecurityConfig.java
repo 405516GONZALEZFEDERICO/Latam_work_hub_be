@@ -29,7 +29,7 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/api/auth/roles/assign").hasAnyRole("DEFAULT", "ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/users/personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
+                        .requestMatchers("/api/users/personal-data").hasAnyRole("CLIENTE", "PROVEEDOR","ADMIN")
                         .requestMatchers("/api/users/*/upload-img").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/users/get-personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/users/*/get-provider-type").hasRole("PROVEEDOR")

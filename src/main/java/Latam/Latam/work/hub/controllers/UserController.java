@@ -123,7 +123,7 @@ public class UserController {
         }
     }
     @GetMapping("/{uid}/get-personal-data")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR')")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR','ADMIN')")
     public ResponseEntity<CompleteUserDataDto> getPersonalData(@PathVariable String uid) {
         try {
             CompleteUserDataDto userData = this.userService.getPersonalDataUser(uid);
