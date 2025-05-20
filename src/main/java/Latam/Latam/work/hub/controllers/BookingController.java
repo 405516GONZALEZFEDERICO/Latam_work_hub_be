@@ -36,7 +36,7 @@ public class BookingController {
     @PreAuthorize("hasRole('CLIENTE')")
     public ResponseEntity<String> refoundBooking(@RequestParam Long bookingId) {
         bookingService.cancelAndRefoundPayment(bookingId);
-        return ResponseEntity.ok("Reserva cancelada exitosamente con la plata devuelta al cliente");
+        return ResponseEntity.ok("Reserva cancelada exitosamente");
     }
 
 

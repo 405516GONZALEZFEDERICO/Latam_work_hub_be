@@ -561,6 +561,10 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
             List<InvoiceEntity> pendingInvoices = invoiceRepository.findPendingInvoicesByContractId(contractId);
             for (InvoiceEntity invoice : pendingInvoices) {
                 invoice.setStatus(InvoiceStatus.CANCELLED);
+                // Establecer monto reembolsado si la factura ya estaba pagada
+                if (invoice.getStatus() == InvoiceStatus.PAID) {
+                    invoice.setRefundAmount(invoice.getTotalAmount());
+                }
             }
             invoiceRepository.saveAll(pendingInvoices);
 
@@ -599,6 +603,22 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
            rentalContractEntity.get().setDepositRefundedAmount(refundAmount);
            rentalContractEntity.get().setDepositRefoundDate(LocalDateTime.now());
            rentalContractRepository.save(rentalContractEntity.get());
+           
+           // Buscar y actualizar las facturas relacionadas con el depósito (generalmente la primera factura)
+           List<InvoiceEntity> contractInvoices = invoiceRepository.findByRentalContractId(contract.getId());
+           if (!contractInvoices.isEmpty()) {
+               // Encontrar la factura del depósito (generalmente la primera)
+               InvoiceEntity depositInvoice = contractInvoices.stream()
+                   .filter(i -> i.getDescription() != null && i.getDescription().toLowerCase().contains("depósito"))
+                   .findFirst()
+                   .orElse(null);
+               
+               if (depositInvoice != null && depositInvoice.getStatus() == InvoiceStatus.PAID) {
+                   depositInvoice.setRefundAmount(refundAmount);
+                   invoiceRepository.save(depositInvoice);
+                   log.info("Actualizada factura de depósito ID {} con reembolso: ${}", depositInvoice.getId(), refundAmount);
+               }
+           }
        }
 
         // Aquí se integraría con la pasarela de pagos para procesar el reembolso

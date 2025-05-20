@@ -1,120 +1,82 @@
 package Latam.Latam.work.hub.security;
 
-import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.auth.FirebaseAuthException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.Collections;
+
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class FirebaseAuthFilter extends OncePerRequestFilter {
 
-    private final FirebaseRoleService firebaseRoleService;
-    private final SecurityPathsConfig securityPathsConfig;
-    private final UserRepository userRepository;
+    @Autowired
+    private FirebaseRoleService firebaseRoleService;
+
+    @Autowired
+    private SecurityPathsConfig securityPathsConfig;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        logger.info("Procesando solicitud: " + request.getMethod() + " " + request.getRequestURI());
 
         String path = request.getRequestURI();
 
+        // Verificamos si es una ruta pública
         if (securityPathsConfig.isPublicPath(path)) {
+            log.debug("Ruta pública: {}, saltando autenticación", path);
             filterChain.doFilter(request, response);
             return;
         }
 
-        String token = getTokenFromRequest(request);
-
-        if (token == null) {
-            sendUnauthorizedResponse(response, "Token no proporcionado");
+        // Obtenemos el token del encabezado Authorization
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            log.debug("Token no presente o con formato incorrecto para: {}", path);
+            filterChain.doFilter(request, response);
             return;
         }
+
+        String idToken = authHeader.substring(7);
 
         try {
-            // Obtener información básica del token
-            String email = firebaseRoleService.getEmailFromToken(token);
+            // Verificamos el token y obtenemos la información del usuario
+            FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRol(idToken);
+            log.debug("Token verificado para usuario: {} con rol: {}", userInfo.getUid(), userInfo.getRole());
 
-            // Verificar si es admin en la base de datos
-            if (userRepository.existsByEmailAndRole("admin@latam.com", "ADMIN")) {
-                // Configurar autenticación para admin sin verificar en Firebase
-                List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-                authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+            // Creamos la autoridad basada en el rol
+            SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + userInfo.getRole());
 
-                Authentication authentication = new UsernamePasswordAuthenticationToken(
-                        email, null, authorities);
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-
-                request.setAttribute("firebaseEmail", email);
-                request.setAttribute("firebaseRole", "ADMIN");
-
-                filterChain.doFilter(request, response);
-                return;
-            }
-
-            // Para otros roles, realizar verificación completa con Firebase
-            FirebaseUserInfoDto userInfo = firebaseRoleService.verificarRol(token);
-
-            request.setAttribute("firebaseEmail", userInfo.getEmail());
-            request.setAttribute("firebaseUid", userInfo.getUid());
-            request.setAttribute("firebaseRole", userInfo.getRole());
-
-            List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-            authorities.add(new SimpleGrantedAuthority("ROLE_" + userInfo.getRole()));
-
-            Authentication authentication = new UsernamePasswordAuthenticationToken(
-                    userInfo.getEmail(), null, authorities);
+            // Establecemos la autenticación en el contexto de seguridad
+            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                    userInfo.getUid(),
+                    null,
+                    Collections.singletonList(authority)
+            );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
+            log.debug("Autenticación establecida para usuario: {}", userInfo.getUid());
 
-            filterChain.doFilter(request, response);
         } catch (FirebaseAuthException e) {
-            log.error("Error de autenticación Firebase: {}", e.getMessage());
-            sendUnauthorizedResponse(response, "Token inválido");
+            log.error("Error al verificar token de Firebase: {}", e.getMessage());
+            // No establecemos autenticación en caso de error
         } catch (Exception e) {
-            log.error("Error de autenticación: {}", e.getMessage());
-            sendUnauthorizedResponse(response, "Error de autenticación");
+            log.error("Error inesperado al procesar autenticación: {}", e.getMessage(), e);
+            // No establecemos autenticación en caso de error
         }
-    }
 
-    private String getTokenFromRequest(HttpServletRequest request) {
-        String bearerToken = request.getHeader("Authorization");
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            return bearerToken.substring(7);
-        }
-        return null;
-    }
-
-    private void sendUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-
-        Map<String, String> errorResponse = new HashMap<>();
-        errorResponse.put("error", "No autorizado");
-        errorResponse.put("message", message);
-
-        String jsonResponse = new ObjectMapper().writeValueAsString(errorResponse);
-        response.getWriter().write(jsonResponse);
+        filterChain.doFilter(request, response);
     }
 }

@@ -56,9 +56,11 @@ public class BookingEntity implements Billable {
     @Column(name = "counter_persons")
     private Integer counterPersons;
 
-
     @Column(name = "total_amount")
     private Double totalAmount;
+    
+    @Column(name = "refund_amount")
+    private Double refundAmount;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "space_id")

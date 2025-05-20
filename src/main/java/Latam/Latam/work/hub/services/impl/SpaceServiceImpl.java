@@ -10,6 +10,7 @@ import Latam.Latam.work.hub.entities.AddressEntity;
 import Latam.Latam.work.hub.entities.AmenityEntity;
 import Latam.Latam.work.hub.entities.ImageEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
+import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.repositories.AddressRepository;
 import Latam.Latam.work.hub.repositories.AmenityRepository;
 import Latam.Latam.work.hub.repositories.ImageRepository;  // Añadir repositorio para las imágenes
@@ -299,6 +300,43 @@ public class SpaceServiceImpl implements SpaceService {
         } catch (Exception e) {
             throw new RuntimeException("Error al eliminar el espacio: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public List<SpaceResponseDto> getAllActiveSpaces() {
+        List<SpaceEntity> activeSpaces = spaceRepository.findAllActiveSpaces();
+
+        return activeSpaces.stream()
+                .map(spaceMapper::toDto)
+                .toList();
+    }
+
+    @Override
+    public Boolean deactivateSpace(Long id, String userUid) {
+        UserEntity admin=this.userService.getUserByUid(userUid);
+        if (admin!=null){
+            SpaceEntity spaceEntity = this.spaceRepository.findById(id)
+                    .orElseThrow(() -> new EntityNotFoundException("Espacio no encontrado"));
+            spaceEntity.setActive(false);
+            spaceEntity.setAvailable(false);
+            this.spaceRepository.save(spaceEntity);
+            return true;
+        }
+        return null;
+    }
+
+    @Override
+    public Boolean activateSpace(Long id, String userUid) {
+        UserEntity admin=this.userService.getUserByUid(userUid);
+        if (admin!=null){
+            SpaceEntity spaceEntity = this.spaceRepository.findById(id)
+                    .orElseThrow(() -> new EntityNotFoundException("Espacio no encontrado"));
+            spaceEntity.setActive(true);
+            spaceEntity.setAvailable(true);
+            this.spaceRepository.save(spaceEntity);
+            return true;
+        }
+        return null;
     }
 
 

@@ -1,7 +1,4 @@
 package Latam.Latam.work.hub.repositories;
-
-import Latam.Latam.work.hub.dtos.common.reports.admin.ContractReportRowDto;
-import Latam.Latam.work.hub.dtos.common.reports.admin.ExpiringContractAlertDto;
 import Latam.Latam.work.hub.entities.RentalContractEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
 import Latam.Latam.work.hub.enums.ContractStatus;
@@ -11,7 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
-
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -97,29 +93,37 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
 
 
     // Query principal simplificada
-    @Query(value = "SELECT rc " +
-            "FROM RentalContractEntity rc " +
-            "JOIN FETCH rc.space s " +
-            "JOIN FETCH rc.tenant t " +
-            "JOIN FETCH s.owner own " + // Propietario desde s.owner
-            "WHERE (:filterStartDate IS NULL OR rc.endDate >= :filterStartDate) " +
-            "AND (:filterEndDate IS NULL OR rc.startDate <= :filterEndDate) " +
-            "AND (:tenantId IS NULL OR t.id = :tenantId) " +
-            "AND (:ownerId IS NULL OR own.id = :ownerId) " +
-            "AND (:contractStatusEnum IS NULL OR rc.contractStatus = :contractStatusEnum)",
-            countQuery = "SELECT COUNT(rc) FROM RentalContractEntity rc JOIN rc.space s JOIN rc.tenant t JOIN s.owner own " +
-                    "WHERE (:filterStartDate IS NULL OR rc.endDate >= :filterStartDate) " +
-                    "AND (:filterEndDate IS NULL OR rc.startDate <= :filterEndDate) " +
-                    "AND (:tenantId IS NULL OR t.id = :tenantId) " +
-                    "AND (:ownerId IS NULL OR own.id = :ownerId) " +
-                    "AND (:contractStatusEnum IS NULL OR rc.contractStatus = :contractStatusEnum)")
-    Page<RentalContractEntity> findContractsForReport( // Devuelve Entidades
-                                                       @Param("filterStartDate") LocalDate filterStartDate,
-                                                       @Param("filterEndDate") LocalDate filterEndDate,
-                                                       @Param("tenantId") Long tenantId,
-                                                       @Param("ownerId") Long ownerId,
-                                                       @Param("contractStatusEnum") ContractStatus contractStatusEnum,
-                                                       Pageable pageable
+    @Query(value = """
+    SELECT DISTINCT rc
+    FROM RentalContractEntity rc
+    JOIN FETCH rc.space s 
+    JOIN FETCH s.owner o
+    JOIN FETCH rc.tenant t
+    WHERE (:startDate IS NULL OR rc.startDate = :startDate)
+    AND (:endDate IS NULL OR rc.endDate = :endDate)
+    AND (:tenantId IS NULL OR rc.tenant.id = :tenantId)
+    AND (:ownerId IS NULL OR s.owner.id = :ownerId)
+    AND (:status IS NULL OR rc.contractStatus = :status)
+""",
+            countQuery = """
+    SELECT COUNT(DISTINCT rc)
+    FROM RentalContractEntity rc
+    JOIN rc.space s 
+    JOIN s.owner o
+    JOIN rc.tenant t
+    WHERE (:startDate IS NULL OR rc.startDate = :startDate)
+    AND (:endDate IS NULL OR rc.endDate = :endDate)
+    AND (:tenantId IS NULL OR rc.tenant.id = :tenantId)
+    AND (:ownerId IS NULL OR s.owner.id = :ownerId)
+    AND (:status IS NULL OR rc.contractStatus = :status)
+""")
+    Page<RentalContractEntity> findContractsForReport(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("tenantId") Long tenantId,
+            @Param("ownerId") Long ownerId,
+            @Param("status") ContractStatus status,
+            Pageable pageable
     );
 
     // Query para Alertas simplificada
@@ -138,4 +142,37 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
                                                                @Param("activeStatus") ContractStatus activeStatus,
                                                                Pageable pageable
     );
+
+
+    @Query("SELECT COUNT(rc) FROM RentalContractEntity rc " +
+            "WHERE rc.space.owner.id = :providerId " +
+            "AND rc.contractStatus = 'ACTIVE'")
+    Long countActiveContractsByProviderId(@Param("providerId") Long providerId);
+
+    @Query("SELECT COUNT(rc) FROM RentalContractEntity rc " +
+            "WHERE rc.tenant.id = :tenantId " +
+            "AND rc.contractStatus = 'ACTIVE'")
+    Long countActiveContractsByTenantId(@Param("tenantId") Long tenantId);
+
+
+
+    /**
+     * Cuenta los contratos según su estado.
+     * Usado para el KPI de "Contratos Activos".
+     */
+    @Query("SELECT COUNT(rc) FROM RentalContractEntity rc WHERE rc.contractStatus = :status")
+    long countByContractStatus(@Param("status") ContractStatus status);
+
+    /**
+     * Cuenta los contratos activos o confirmados que vencerán en un rango de fechas futuro.
+     * Usado para el KPI de "Contratos Próximos a Vencer".
+     */
+    @Query("SELECT COUNT(rc) FROM RentalContractEntity rc WHERE rc.contractStatus IN :statuses AND rc.endDate >= :currentDate AND rc.endDate <= :futureDate")
+    long countActiveOrConfirmedContractsExpiringBetween(
+            @Param("statuses") List<ContractStatus> statuses, // e.g., ACTIVE, CONFIRMED
+            @Param("currentDate") LocalDate currentDate,
+            @Param("futureDate") LocalDate futureDate
+    );
+
+
 }

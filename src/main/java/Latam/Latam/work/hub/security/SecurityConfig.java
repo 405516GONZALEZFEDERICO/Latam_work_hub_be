@@ -2,6 +2,7 @@ package Latam.Latam.work.hub.security;
 
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -15,8 +16,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
-
-    private final FirebaseAuthFilter firebaseAuthFilter;
+    @Autowired
+    private  FirebaseAuthFilter firebaseAuthFilter;
     private final SecurityPathsConfig securityPathsConfig;
 
     @Bean
@@ -27,11 +28,14 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(securityPathsConfig.PUBLIC_PATHS.toArray(new String[0]))
                         .permitAll()
-                        .requestMatchers("/api/auth/roles/assign").hasAnyRole("DEFAULT", "ADMIN")
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/auth/roles/assign").hasRole("DEFAULT")
+                        .requestMatchers("api/users/get-user-list").hasRole("ADMIN")
+                        .requestMatchers("/api/users/activate-account/**").hasAnyRole("CLIENTE", "PROVEEDOR", "ADMIN")
+                        .requestMatchers("/api/users/activate-account").hasAnyRole("CLIENTE", "PROVEEDOR", "ADMIN")
+                        .requestMatchers("api/spaces/spaces-list").hasRole("ADMIN")
                         .requestMatchers("/api/users/personal-data").hasAnyRole("CLIENTE", "PROVEEDOR","ADMIN")
-                        .requestMatchers("/api/users/*/upload-img").hasAnyRole("CLIENTE", "PROVEEDOR")
-                        .requestMatchers("/api/users/get-personal-data").hasAnyRole("CLIENTE", "PROVEEDOR")
+                        .requestMatchers("/api/users/*/upload-img").hasAnyRole("CLIENTE", "PROVEEDOR","ADMIN")
+                        .requestMatchers("/api/users/get-personal-data").hasAnyRole("CLIENTE", "PROVEEDOR","ADMIN")
                         .requestMatchers("/api/users/*/get-provider-type").hasRole("PROVEEDOR")
                         .requestMatchers("/api/booking/**").hasRole("CLIENTE")
                         .requestMatchers("/api/rental-contracts/**").hasRole("CLIENTE")
@@ -43,7 +47,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/spaces/*").hasAnyRole("CLIENTE", "PROVEEDOR")
                         .requestMatchers("/api/spaces/provider/spaces").hasRole("PROVEEDOR")
                         .requestMatchers("/api/amenities/*").hasAnyRole("CLIENTE", "PROVEEDOR")
-//                        .requestMatchers("/api/reports/full-summary").hasRole("ADMIN")
+                        .requestMatchers("/api/reports").hasRole("ADMIN")
+                        .requestMatchers("/api/dashboard-admin/*").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(firebaseAuthFilter, UsernamePasswordAuthenticationFilter.class);

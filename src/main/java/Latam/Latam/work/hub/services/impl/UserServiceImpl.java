@@ -2,6 +2,7 @@ package Latam.Latam.work.hub.services.impl;
 
 import Latam.Latam.work.hub.configs.mapper.ModelMapperConfig;
 import Latam.Latam.work.hub.dtos.common.CompleteUserDataDto;
+import Latam.Latam.work.hub.dtos.common.DisableUserDto;
 import Latam.Latam.work.hub.dtos.common.PersonalDataUserDto;
 import Latam.Latam.work.hub.dtos.common.ProviderTypeDto;
 import Latam.Latam.work.hub.entities.UserEntity;
@@ -9,15 +10,20 @@ import Latam.Latam.work.hub.exceptions.AuthException;
 import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.services.UserService;
 import Latam.Latam.work.hub.services.cloudinary.CloudinaryService;
+import com.google.common.reflect.TypeToken;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.lang.reflect.Type;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -28,6 +34,8 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final ModelMapperConfig modelMapperConfig;
     private final CloudinaryService cloudinaryService;
+    private final ModelMapper modelMapper;
+
     @Transactional
     public UserEntity createOrUpdateLocalUser(String email, String uid, String photoUrl, String name) {
         Optional<UserEntity> userOpt = userRepository.findByEmail(email);
@@ -155,6 +163,27 @@ public class UserServiceImpl implements UserService {
         return userRepository.findByFirebaseUid(uid).orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
     }
 
+
+
+    @Override
+    public ProviderTypeDto getProviderType(String uid) {
+        UserEntity userEntity=this.userRepository.findByFirebaseUid(uid).orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
+        ProviderTypeDto providerTypeDto = new ProviderTypeDto();
+        providerTypeDto.setProviderType(String.valueOf(userEntity.getProviderType()));
+        return  providerTypeDto;
+    }
+
+    @Override
+    public List<DisableUserDto> getAllUsersActive( String roleName) {
+        List<UserEntity> allUsers=this.userRepository.findUsersEnabledByRole(roleName);
+        if (allUsers.isEmpty()) {
+            throw new EntityNotFoundException("Usuarios  por rol activos no encontrados");
+        }
+        Type listType = new TypeToken<List<DisableUserDto>>(){}.getType();
+        List<DisableUserDto>disableUserDtoList=modelMapperConfig.modelMapper().map(allUsers, listType);
+        return disableUserDtoList;
+
+    }
     @Override
     public boolean desactivateAccount(String uid) {
         Optional<UserEntity> user=this.userRepository.findByFirebaseUid(uid);
@@ -166,14 +195,16 @@ public class UserServiceImpl implements UserService {
         }
         return false;
     }
-
     @Override
-    public ProviderTypeDto getProviderType(String uid) {
-        UserEntity userEntity=this.userRepository.findByFirebaseUid(uid).orElseThrow(() -> new EntityNotFoundException("Usuario no encontrado"));
-        ProviderTypeDto providerTypeDto = new ProviderTypeDto();
-        providerTypeDto.setProviderType(String.valueOf(userEntity.getProviderType()));
-        return  providerTypeDto;
+    public boolean activateAccount(String uid) {
+        Optional<UserEntity> user=this.userRepository.findByFirebaseUid(uid);
+        if (user.isPresent()) {
+            UserEntity userEntity = user.get();
+            userEntity.setEnabled(true);
+            userRepository.save(userEntity);
+            return true;
+        }
+        return false;
     }
-
 
 }

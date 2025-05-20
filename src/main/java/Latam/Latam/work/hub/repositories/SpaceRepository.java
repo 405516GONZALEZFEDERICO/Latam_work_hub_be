@@ -84,8 +84,8 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
             Pageable pageable
     );
 
-    @Query("SELECT COUNT(s) FROM SpaceEntity s WHERE s.active = true AND s.available = true AND s.deleted = false")
-    long countByActiveTrueAndAvailableTrueAndDeletedFalse();
+//    @Query("SELECT COUNT(s) FROM SpaceEntity s WHERE s.active = true AND s.available = true AND s.deleted = false")
+//    long countByActiveTrueAndAvailableTrueAndDeletedFalse();
 
     @Query(value = "SELECT s " +
             "FROM SpaceEntity s JOIN FETCH s.owner ow " +
@@ -110,4 +110,13 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
             Pageable pageable
     );
 
+
+    @Query("SELECT COUNT(s) FROM SpaceEntity s WHERE s.owner.id = :ownerId AND s.deleted = false")
+    Long countByOwnerId(@Param("ownerId") Long ownerId);
+
+    @Query("SELECT COUNT(s) FROM SpaceEntity s WHERE s.active = true AND s.deleted = false")
+    long countPublishedSpaces();
+
+    @Query("SELECT s FROM SpaceEntity s WHERE s.active = true or s.active = false ")
+    List<SpaceEntity> findAllActiveSpaces();
 }

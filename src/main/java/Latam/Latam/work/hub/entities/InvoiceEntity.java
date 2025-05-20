@@ -50,6 +50,9 @@ public class InvoiceEntity {
 
     @Column(name = "total_amount")
     private Double totalAmount;
+    
+    @Column(name = "refund_amount")
+    private Double refundAmount;
 
     @Enumerated(EnumType.STRING)
     private InvoiceStatus status;

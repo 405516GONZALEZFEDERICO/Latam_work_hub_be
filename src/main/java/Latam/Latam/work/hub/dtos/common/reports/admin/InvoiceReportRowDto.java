@@ -20,4 +20,5 @@ public class InvoiceReportRowDto {
     private Double paidAmount;    // Se llenará, o será 0.0 si no existe en la entidad
     private Double pendingAmount; // Se calculará
     private String status;
+    private String invoiceType;
 }

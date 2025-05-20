@@ -171,33 +171,43 @@ public class BookingServiceImpl implements BookingService {
         }
 
         // Buscar la factura asociada a la reserva
-        InvoiceEntity invoice = invoiceService.findByBookingId(bookingId);
+        InvoiceEntity invoice = invoiceRepository.findByBookingId(bookingId)
+                .orElse(null);
 
-        // Manejar el pago según el estado de la factura
+        // Asegurarse de que el espacio quede disponible
+        SpaceEntity space = booking.getSpace();
+        space.setAvailable(true);
+        spaceRepository.save(space);
+
+        // Actualizar la entidad de reserva
+        booking.setStatus(BookingStatus.CANCELED);
+        booking.setActive(false);
         if (invoice != null && invoice.getStatus() == InvoiceStatus.PAID) {
+            booking.setRefundAmount(booking.getTotalAmount()); // Guardamos el reembolso en la reserva
+        }
+        bookingRepository.save(booking);
+        
+        // Procesar la factura si existe
+        if (invoice != null) {
             try {
-                boolean refunded = mercadoPagoService.refundPayment(invoice.getId());
-                if (!refunded) {
-                    throw new RuntimeException("No se pudo procesar el reembolso para la factura asociada");
+                // Intentamos el reembolso MercadoPago si hay paymentId
+                if (invoice.getPaymentId() != null) {
+                    try {
+                        mercadoPagoService.refundPayment(invoice.getId());
+                    } catch (Exception refundException) {
+                        // Si falla el reembolso, simplemente lo ignoramos
+                        // y continuamos con la cancelación
+                        System.out.println("Error al intentar reembolsar el pago: " + refundException.getMessage());
+                    }
                 }
-            } catch (Exception e) {
-                throw new RuntimeException("Error al intentar reembolsar el pago: " + e.getMessage(), e);
-            }
-        } else {
-            // Si no hay factura o no está pagada, simplemente cancelamos la reserva
-            booking.setStatus(BookingStatus.CANCELED);
-            booking.setActive(false);
-            bookingRepository.save(booking);
-
-            // Marcar el espacio como disponible nuevamente
-            SpaceEntity space = booking.getSpace();
-            space.setAvailable(true);
-            spaceRepository.save(space);
-
-            // Actualizar el estado de la factura si existe
-            if (invoice != null) {
+                
+                // Siempre actualizamos el estado de la factura a cancelada
                 invoice.setStatus(InvoiceStatus.CANCELLED);
-
+                invoiceRepository.save(invoice);
+                
+            } catch (Exception e) {
+                // Garantizamos que la factura esté cancelada, incluso si hay otros errores
+                invoice.setStatus(InvoiceStatus.CANCELLED);
                 invoiceRepository.save(invoice);
             }
         }

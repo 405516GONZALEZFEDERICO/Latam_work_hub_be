@@ -81,7 +81,7 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
     );
 
 
-    @Query("SELECT bk.space.id AS spaceId, SUM(inv.totalAmount) AS totalRevenue " +
+    @Query("SELECT bk.space.id AS spaceId, SUM(inv.totalAmount - COALESCE(inv.refundAmount, 0)) AS totalRevenue " +
             "FROM InvoiceEntity inv JOIN inv.booking bk " +
             "WHERE bk.space.id IN :spaceIds AND inv.status = :status " +
             "  AND (:startDate IS NULL OR inv.issueDate >= :startDate) " +
@@ -94,8 +94,8 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
             @Param("status") InvoiceStatus status
     );
 
-    @Query("SELECT rc_entity.space.id AS spaceId, SUM(inv.totalAmount) AS totalRevenue " + // Cambiado rc a rc_entity para evitar conflicto con el alias 'rc' de la entidad
-            "FROM InvoiceEntity inv JOIN inv.rentalContract rc_entity " + // rc_entity es RentalContractEntity
+    @Query("SELECT rc_entity.space.id AS spaceId, SUM(inv.totalAmount - COALESCE(inv.refundAmount, 0)) AS totalRevenue " + 
+            "FROM InvoiceEntity inv JOIN inv.rentalContract rc_entity " + 
             "WHERE rc_entity.space.id IN :spaceIds AND inv.status = :status " +
             "  AND (:startDate IS NULL OR inv.issueDate >= :startDate) " +
             "  AND (:endDate IS NULL OR inv.issueDate <= :endDate) " +
@@ -123,28 +123,40 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
 
 
 
-    // Query principal simplificada
-    @Query(value = "SELECT i " +
-            "FROM InvoiceEntity i " +
-            "LEFT JOIN FETCH i.booking b LEFT JOIN FETCH b.user bc " + // Cliente de booking
-            "LEFT JOIN FETCH i.rentalContract rcontract LEFT JOIN FETCH rcontract.tenant rct " + // Cliente de contrato
-            "WHERE ((:filterStartDate IS NULL AND :filterEndDate IS NULL) " +
-            "    OR (i.issueDate >= :filterStartDate AND i.issueDate <= :filterEndDate)) " +
-            "AND (:clientId IS NULL OR bc.id = :clientId OR rct.id = :clientId) " + // Filtro de cliente
-            "AND (:invoiceStatusEnum IS NULL OR i.status = :invoiceStatusEnum)",
-            countQuery = "SELECT COUNT(i) FROM InvoiceEntity i " +
-                    "LEFT JOIN i.booking b LEFT JOIN b.user bc " +
-                    "LEFT JOIN i.rentalContract rcontract LEFT JOIN rcontract.tenant rct " +
-                    "WHERE ((:filterStartDate IS NULL AND :filterEndDate IS NULL) " +
-                    "    OR (i.issueDate >= :filterStartDate AND i.issueDate <= :filterEndDate)) " +
-                    "AND (:clientId IS NULL OR bc.id = :clientId OR rct.id = :clientId) " +
-                    "AND (:invoiceStatusEnum IS NULL OR i.status = :invoiceStatusEnum)")
-    Page<InvoiceEntity> findInvoicesForReport( // Devuelve Entidades
-                                               @Param("filterStartDate") LocalDateTime filterStartDate,
-                                               @Param("filterEndDate") LocalDateTime filterEndDate,
-                                               @Param("clientId") Long clientId,
-                                               @Param("invoiceStatusEnum") InvoiceStatus invoiceStatusEnum,
-                                               Pageable pageable
+    @Query(value = """
+    SELECT DISTINCT i
+    FROM InvoiceEntity i
+    LEFT JOIN FETCH i.booking b 
+    LEFT JOIN FETCH b.user bc
+    LEFT JOIN FETCH i.rentalContract rcontract 
+    LEFT JOIN FETCH rcontract.tenant rct
+    WHERE (:clientId IS NULL OR 
+          EXISTS (SELECT 1 FROM BookingEntity bb WHERE bb.id = i.booking.id AND bb.user.id = :clientId) OR 
+          EXISTS (SELECT 1 FROM RentalContractEntity rc WHERE rc.id = i.rentalContract.id AND rc.tenant.id = :clientId))
+    AND (:filterStartDate IS NULL OR i.issueDate >= :filterStartDate)
+    AND (:filterEndDate IS NULL OR i.issueDate <= :filterEndDate)
+    AND (:invoiceStatusEnum IS NULL OR i.status = :invoiceStatusEnum)
+""",
+            countQuery = """
+    SELECT COUNT(DISTINCT i)
+    FROM InvoiceEntity i
+    LEFT JOIN i.booking b 
+    LEFT JOIN b.user bc
+    LEFT JOIN i.rentalContract rcontract 
+    LEFT JOIN rcontract.tenant rct
+    WHERE (:clientId IS NULL OR 
+          EXISTS (SELECT 1 FROM BookingEntity bb WHERE bb.id = i.booking.id AND bb.user.id = :clientId) OR 
+          EXISTS (SELECT 1 FROM RentalContractEntity rc WHERE rc.id = i.rentalContract.id AND rc.tenant.id = :clientId))
+    AND (:filterStartDate IS NULL OR i.issueDate >= :filterStartDate)
+    AND (:filterEndDate IS NULL OR i.issueDate <= :filterEndDate)
+    AND (:invoiceStatusEnum IS NULL OR i.status = :invoiceStatusEnum)
+""")
+    Page<InvoiceEntity> findInvoicesForReport(
+            @Param("filterStartDate") LocalDateTime filterStartDate,
+            @Param("filterEndDate") LocalDateTime filterEndDate, // Este parámetro seguirá existiendo en la firma
+            @Param("clientId") Long clientId,
+            @Param("invoiceStatusEnum") InvoiceStatus invoiceStatusEnum,
+            Pageable pageable
     );
 
     // Query para Alertas simplificada
@@ -163,14 +175,108 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
                                                       Pageable pageable
     );
 
-    @Query("SELECT COALESCE(SUM(i.totalAmount), 0.0) FROM InvoiceEntity i " +
-            "WHERE i.status = :status " +
-            "AND i.issueDate BETWEEN :startDate AND :endDate " +
-            "AND (i.booking IS NOT NULL OR i.rentalContract IS NOT NULL)")
-    Double sumTotalAmountByStatusAndDateRange(
-            @Param("status") InvoiceStatus status,
+//    @Query("SELECT COALESCE(SUM(i.totalAmount), 0.0) FROM InvoiceEntity i " +
+//            "WHERE i.status = :status " +
+//            "AND i.issueDate BETWEEN :startDate AND :endDate " +
+//            "AND (i.booking IS NOT NULL OR i.rentalContract IS NOT NULL)")
+//    Double sumTotalAmountByStatusAndDateRange(
+//            @Param("status") InvoiceStatus status,
+//            @Param("startDate") LocalDateTime startDate,
+//            @Param("endDate") LocalDateTime endDate
+//    );
+@Query("""
+        SELECT COALESCE(SUM(i.totalAmount - COALESCE(i.refundAmount, 0)), 0.0)
+        FROM InvoiceEntity i
+        WHERE i.rentalContract.space.owner.id = :providerId
+        AND i.status = 'PAID'
+        AND (:startDate IS NULL OR i.issueDate >= :startDate)
+        AND (:endDate IS NULL OR i.issueDate <= :endDate)
+    """)
+Double sumRevenueByProviderId(
+        @Param("providerId") Long providerId,
+        @Param("startDate") LocalDateTime startDate,
+        @Param("endDate") LocalDateTime endDate
+);
+
+    @Query("""
+        SELECT COALESCE(SUM(i.totalAmount - COALESCE(i.refundAmount, 0)), 0.0)
+        FROM InvoiceEntity i
+        LEFT JOIN i.booking b
+        LEFT JOIN i.rentalContract rc
+        WHERE (b.user.id = :clientId OR rc.tenant.id = :clientId)
+        AND i.status = 'PAID'
+        AND (:startDate IS NULL OR i.issueDate >= :startDate)
+        AND (:endDate IS NULL OR i.issueDate <= :endDate)
+    """)
+    Double sumSpendingByClientId(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    // HU1: Ingresos totales (últimos 30 días)
+    @Query("SELECT SUM(CASE WHEN inv.status = 'CANCELLED' THEN -1 * COALESCE(inv.refundAmount, 0) " +
+           "            ELSE (inv.totalAmount - COALESCE(inv.refundAmount, 0)) END) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE (inv.status = 'PAID' OR inv.status = 'CANCELLED') " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL")
+    Double sumTotalAmountByDateRange(
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
     );
 
+    // HU2: Gráfico de líneas de ingresos por mes.
+    // JPQL estándar no tiene funciones de extracción de mes/año de forma portable para GROUP BY.
+    // Traemos issueDate y totalAmount, y agrupamos en la capa de servicio.
+    @Query("SELECT inv.issueDate, (CASE WHEN inv.status = 'CANCELLED' THEN 0 ELSE (inv.totalAmount - COALESCE(inv.refundAmount, 0)) END) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.status = :status " +
+           "AND inv.status != 'CANCELLED' " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL " +
+           "ORDER BY inv.issueDate ASC")
+    List<Object[]> findRawMonthlyRevenueData(
+            @Param("status") InvoiceStatus status,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    // Traer todas las facturas de contratos para calcular ingresos
+    @Query("SELECT inv FROM InvoiceEntity inv " +
+           "WHERE inv.status IN (:statuses) " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL")
+    List<InvoiceEntity> findInvoicesForRevenueCalculation(
+            @Param("statuses") List<InvoiceStatus> statuses,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    // Traer facturas para gráfico de ingresos mensuales
+    @Query("SELECT inv FROM InvoiceEntity inv " +
+           "WHERE inv.status IN (:statuses) " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL " +
+           "ORDER BY inv.issueDate ASC")
+    List<InvoiceEntity> findInvoicesForMonthlyRevenueData(
+            @Param("statuses") List<InvoiceStatus> statuses,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    @Query("SELECT FUNCTION('YEAR', inv.issueDate) as year, FUNCTION('MONTH', inv.issueDate) as month, " +
+           "SUM(CASE WHEN inv.status = 'CANCELLED' THEN -1 * COALESCE(inv.refundAmount, 0) " +
+           "     ELSE (inv.totalAmount - COALESCE(inv.refundAmount, 0)) END) as revenue " +
+           "FROM InvoiceEntity inv " +
+           "WHERE (inv.status = 'PAID' OR inv.status = 'CANCELLED') " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL " +
+           "AND inv.issueDate >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', inv.issueDate), FUNCTION('MONTH', inv.issueDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlyRevenue(@Param("startDate") LocalDateTime startDate);
 }

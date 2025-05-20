@@ -39,19 +39,22 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
             RoleEntity rolEntity = roleRepository.findByName(rolNombre)
                     .orElseThrow(() -> new AuthException("Rol no válido: " + rolNombre));
 
-            Map<String, Object> claims = new HashMap<>();
-            claims.put("role", rolEntity.getName());
-            claims.put("updated_at", System.currentTimeMillis());
-
-            FirebaseAuth.getInstance().setCustomUserClaims(uid, claims);
-
+            // Actualizar usuario en base de datos
             UserEntity user = userRepository.findByFirebaseUid(uid)
                     .orElseThrow(() -> new AuthException("Usuario no encontrado con UID: " + uid));
 
             user.setRole(rolEntity); 
             user.setLastAccess(LocalDateTime.now());
             userRepository.save(user);
-            log.info("Rol {} asignado al usuario {}", rolEntity.getName(), uid);
+
+            // Actualizar claims en Firebase
+            Map<String, Object> claims = new HashMap<>();
+            claims.put("role", rolEntity.getName());
+            claims.put("updated_at", System.currentTimeMillis());
+
+            FirebaseAuth.getInstance().setCustomUserClaims(uid, claims);
+            
+            log.info("Rol {} asignado al usuario {} en DB y Firebase", rolEntity.getName(), uid);
         } catch (FirebaseAuthException e) {
             log.error("Error al asignar rol a usuario {}: {}", uid, e.getMessage());
             throw e;
@@ -82,6 +85,20 @@ public class FirebaseRoleServiceImpl implements FirebaseRoleService {
             } else {
                 userEntity.setLastAccess(LocalDateTime.now());
                 userRepository.save(userEntity);
+                
+                // Obtener el rol desde la base de datos
+                String dbRole = userEntity.getRole().getName();
+                
+                // Si el rol en la base de datos es diferente del rol en los claims, actualizar claims
+                if (!dbRole.equals(role)) {
+                    log.info("Actualizando rol en Firebase para uid {}: de {} a {}", uid, role, dbRole);
+                    Map<String, Object> updatedClaims = new HashMap<>();
+                    updatedClaims.put("role", dbRole);
+                    updatedClaims.put("updated_at", System.currentTimeMillis());
+                    
+                    FirebaseAuth.getInstance().setCustomUserClaims(uid, updatedClaims);
+                    role = dbRole;
+                }
             }
 
             return FirebaseUserInfoDto.builder()

@@ -17,5 +17,7 @@ Page<SpaceResponseDto>findSpacesFiltered(FiltersSpaceDto filters, Pageable pagea
 SpaceResponseDto findSpaceById(Long id);
 Page<SpaceResponseDto> findSpacesByOwnerUid(String uid, FiltersSpaceDto filters, Pageable pageable);
 boolean deleteSpace(Long spaceId,String uid);
-
+List<SpaceResponseDto> getAllActiveSpaces();
+Boolean deactivateSpace(Long id, String userUid);
+Boolean activateSpace(Long id, String userUid);
 }

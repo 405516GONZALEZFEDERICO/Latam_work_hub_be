@@ -43,7 +43,10 @@ public class SpaceControlller {
         return ResponseEntity.ok(spaceService.createSpace(spaceDto, images));
     }
 
+
+
     @GetMapping("/search")
+    @PreAuthorize("hasRole('CLIENTE')")
     public ResponseEntity<Page<SpaceResponseDto>> getActiveAvailableSpaces(
             @RequestParam(required = false) Double pricePerHour,
             @RequestParam(required = false) Double pricePerDay,
@@ -125,5 +128,22 @@ public class SpaceControlller {
     @PreAuthorize("hasRole('PROVEEDOR')")
     public ResponseEntity<Boolean> deleteSpace(@PathVariable Long id, @RequestParam String userUid) {
         return ResponseEntity.ok(spaceService.deleteSpace(id, userUid));
+    }
+
+    @PatchMapping("/{id}/deactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Boolean> deactivateSpace(@PathVariable Long id, @RequestParam String userUid) {
+        return   ResponseEntity.ok(spaceService.deactivateSpace(id, userUid));
+    }
+
+    @PatchMapping("/{id}/activate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Boolean> activateSpace(@PathVariable Long id, @RequestParam String userUid) {
+        return   ResponseEntity.ok(spaceService.activateSpace(id, userUid));
+    }
+    @GetMapping("/spaces-list")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<SpaceResponseDto>> getAllActiveSpaces() {
+        return ResponseEntity.ok(spaceService.getAllActiveSpaces());
     }
 }

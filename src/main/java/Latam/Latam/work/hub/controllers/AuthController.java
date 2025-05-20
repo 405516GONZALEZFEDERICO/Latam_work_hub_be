@@ -11,6 +11,7 @@ import Latam.Latam.work.hub.services.GoogleAuthService;
 import com.google.firebase.auth.FirebaseAuthException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +36,9 @@ public class AuthController {
     private final AuthService authService;
     private final FirebaseRoleService firebaseRoleService;
     private final GoogleAuthService googleAuthService;
+
+    @Value("${clave.admin}")
+    private final String claveAdmin;
 
     @PostMapping("/google/login")
     public ResponseEntity<AuthResponseGoogleDto> loginWithGoogle(@RequestParam String idToken) {
@@ -77,35 +81,45 @@ public class AuthController {
 
 
     @PostMapping("/roles/assign")
-    @PreAuthorize("hasRole('DEFAULT') || hasRole('ADMIN')")
-    public ResponseEntity<?> assignRoleToUser(@RequestBody RoleAssignmentRequestDto request) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        System.out.println("Authorities: " + auth.getAuthorities());
-        try {
-            firebaseRoleService.assignRolFirebaseUser(request.getUid(), request.getRoleName());
-            return ResponseEntity.ok().body(
-                    Map.of(
-                            "success", true,
-                            "message", "Rol " + request.getRoleName() + " asignado correctamente al usuario"
-                    )
-            );
-        } catch (FirebaseAuthException e) {
-            log.error("Error al asignar rol: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+    @PreAuthorize("hasRole('DEFAULT')")
+    public ResponseEntity<?> assignRoleToUser(@RequestBody RoleAssignmentRequestDto request ) {
+        if (claveAdmin.equals(request.getAdminKey())){
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            System.out.println("Authorities: " + auth.getAuthorities());
+            try {
+                firebaseRoleService.assignRolFirebaseUser(request.getUid(), request.getRoleName());
+                return ResponseEntity.ok().body(
+                        Map.of(
+                                "success", true,
+                                "message", "Rol " + request.getRoleName() + " asignado correctamente al usuario"
+                        )
+                );
+            } catch (FirebaseAuthException e) {
+                log.error("Error al asignar rol: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                        Map.of(
+                                "success", false,
+                                "message", "Error al asignar rol: " + e.getMessage()
+                        )
+                );
+            } catch (AuthException e) {
+                log.error("Error de autenticación: {}", e.getMessage());
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                        Map.of(
+                                "success", false,
+                                "message", e.getMessage()
+                        )
+                );
+            }
+        }else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
                     Map.of(
                             "success", false,
-                            "message", "Error al asignar rol: " + e.getMessage()
-                    )
-            );
-        } catch (AuthException e) {
-            log.error("Error de autenticación: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
-                    Map.of(
-                            "success", false,
-                            "message", e.getMessage()
+                            "message", "Clave de administrador incorrecta"
                     )
             );
         }
+
     }
     @GetMapping("/recuperar-contrasenia")
     public ResponseEntity<String> recuperarContrasenia(@RequestParam String email) {

@@ -199,7 +199,7 @@ class AuthControllerTest {
 
     @Test
     void assignRoleToUser_Unauthorized() throws Exception {
-        RoleAssignmentRequestDto request = new RoleAssignmentRequestDto("user123", "ADMIN");
+        RoleAssignmentRequestDto request = RoleAssignmentRequestDto.builder().build();
 
         mockMvc.perform(post("/api/auth/roles/assign")
                         .with(csrf())

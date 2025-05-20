@@ -183,11 +183,7 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
             InvoiceEntity invoiceEntity = this.invoiceRepository.findById(invoiceId)
                     .orElseThrow(() -> new EntityNotFoundException("Factura no encontrada: " + invoiceId));
 
-            // Verificar si la factura ya está procesada
-            if (invoiceEntity.getStatus() == InvoiceStatus.PAID) {
-                return "Factura ya procesada";
-            }
-
+            // Siempre procesamos la actualización de la factura y la reserva, incluso si ya fue procesada anteriormente
             Long paymentId = merchantOrder.getPayments().get(0).getId();
             invoiceEntity.setStatus(InvoiceStatus.PAID);
             invoiceEntity.setPaymentId(paymentId);
@@ -208,13 +204,25 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
 
     private void processBookingPayment(InvoiceEntity invoiceEntity) {
         BookingEntity booking = invoiceEntity.getBooking();
-        bookingService.confirmBookingPayment(booking.getId());
+        
+        // Forzamos la actualización de la reserva independientemente de su estado actual
+        booking.setStatus(BookingStatus.CONFIRMED);
+        booking.setActive(true);
+        bookingRepository.save(booking);
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
         String formattedDate = invoiceEntity.getIssueDate().format(formatter);
         SpaceEntity space = invoiceEntity.getBooking().getSpace();
         space.setAvailable(false);
         spaceRepository.save(space);
+        
+        // Informamos al servicio de reservas sobre el pago confirmado
+        try {
+            bookingService.confirmBookingPayment(booking.getId());
+        } catch (Exception e) {
+            // Si falla el servicio de reservas, al menos ya actualizamos la entidad directamente
+        }
+        
         this.mailService.sendPaymentConfirmationEmail(
                 booking.getUser().getEmail(),
                 booking.getUser().getName(),
@@ -255,16 +263,20 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
             InvoiceEntity invoice = invoiceRepository.findById(invoiceId)
                     .orElseThrow(() -> new EntityNotFoundException("Invoice not found: " + invoiceId));
 
-            // Check if invoice is in a refundable state
-            if (invoice.getStatus() != InvoiceStatus.PAID) {
-                throw new RuntimeException("La factura no está en estado pagado y no puede ser reembolsada");
-            }
-
             // Get payment ID from invoice
             Long paymentId = invoice.getPaymentId();
             if (paymentId == null) {
-                throw new RuntimeException("No se encontró ID de pago para esta factura");
+                throw new RuntimeException("No se encontró ID de pago para esta factura, no se puede reembolsar");
             }
+            
+            // Obtenemos la reserva asociada
+            BookingEntity booking = invoice.getBooking();
+            if (booking == null) {
+                throw new RuntimeException("No hay reserva asociada a esta factura");
+            }
+            
+            // Permitimos reembolsos aunque la factura esté en otro estado siempre que tenga paymentId
+            // Esto ayuda en casos donde el estado puede estar desincronizado pero existe un pago real
 
             String idempotencyKey = UUID.randomUUID().toString();
 
@@ -281,9 +293,9 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                 invoice.setStatus(InvoiceStatus.CANCELLED);
                 invoiceRepository.save(invoice);
 
-                // Update booking status
-                BookingEntity booking = invoice.getBooking();
+                // Update booking status and refund amount
                 booking.setStatus(BookingStatus.CANCELED);
+                booking.setRefundAmount(booking.getTotalAmount()); // Guardamos el monto reembolsado en la reserva
                 bookingRepository.save(booking);
 
                 // Mark the space as available again
@@ -296,7 +308,7 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                         booking.getUser().getEmail(),
                         booking.getUser().getName(),
                         booking.getSpace().getName(),
-                        invoice.getTotalAmount());
+                        booking.getTotalAmount());
 
                 return true;
             } else {

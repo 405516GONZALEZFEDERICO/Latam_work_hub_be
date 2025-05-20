@@ -104,16 +104,16 @@ public class AuthServiceImpl implements AuthService {
 
 
             // Si el rol es ADMIN, realizar login sin verificación Firebase
-            if ("ADMIN".equalsIgnoreCase(userRole)) {
-                Map<String, Object> responseBody = authRestService.signInWithEmailAndPassword(email, password);
-                return AuthResponseDto.builder()
-                        .idToken((String) responseBody.get("idToken"))
-                        .refreshToken((String) responseBody.get("refreshToken"))
-                        .expiresIn((String) responseBody.get("expiresIn"))
-                        .role("ADMIN")
-                        .firebaseUid((String) responseBody.get("localId"))
-                        .build();
-            }
+//            if ("ADMIN".equalsIgnoreCase(userRole)) {
+//                Map<String, Object> responseBody = authRestService.signInWithEmailAndPassword(email, password);
+//                return AuthResponseDto.builder()
+//                        .idToken((String) responseBody.get("idToken"))
+//                        .refreshToken((String) responseBody.get("refreshToken"))
+//                        .expiresIn((String) responseBody.get("expiresIn"))
+//                        .role("ADMIN")
+//                        .firebaseUid((String) responseBody.get("localId"))
+//                        .build();
+//            }
 
             // Para otros roles, realizar verificación completa con Firebase
             Map<String, Object> responseBody = authRestService.signInWithEmailAndPassword(email, password);

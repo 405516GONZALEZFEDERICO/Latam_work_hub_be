@@ -34,7 +34,6 @@ public class CompanyController {
             return ResponseEntity.ok(companyInfo);
         } catch (Exception e) {
             log.error("Error al obtener información de la empresa: {}", e.getMessage());
-            // Devolver un DTO vacío con estado 200
             CompanyInfoDto emptyDto = new CompanyInfoDto();
             emptyDto.setName("");
             emptyDto.setLegalName("");

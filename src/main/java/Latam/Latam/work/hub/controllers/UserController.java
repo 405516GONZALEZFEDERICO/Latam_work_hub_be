@@ -2,6 +2,7 @@ package Latam.Latam.work.hub.controllers;
 
 
 import Latam.Latam.work.hub.dtos.common.CompleteUserDataDto;
+import Latam.Latam.work.hub.dtos.common.DisableUserDto;
 import Latam.Latam.work.hub.dtos.common.PersonalDataUserDto;
 import Latam.Latam.work.hub.dtos.common.ProviderTypeDto;
 import Latam.Latam.work.hub.exceptions.AuthException;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -37,7 +39,7 @@ public class UserController {
     private final UserService userService;
 
     @PostMapping("/personal-data")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR')")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR', 'ADMIN')")
     public ResponseEntity<PersonalDataUserDto> createOrUpdatePersonalData(
             @RequestBody PersonalDataUserDto personalDataUserDto,
             @RequestHeader("Authorization") String authorization) {
@@ -56,7 +58,7 @@ public class UserController {
 
 
     @PatchMapping("/desactivate-account/{uid}")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR')")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR', 'ADMIN')")
     public ResponseEntity<?> desactivateAccount(@PathVariable String uid) {
         try {
             boolean result = userService.desactivateAccount(uid);
@@ -74,8 +76,29 @@ public class UserController {
         }
     }
 
+
+
+    @PatchMapping("/activate-account/{uid}")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR', 'ADMIN')")
+    public ResponseEntity<?> activateAccount(@PathVariable String uid) {
+        try {
+            boolean result = userService.activateAccount(uid);
+            return ResponseEntity.ok(result);
+        } catch (EntityNotFoundException e) {
+            log.error("Error al activar cuenta: Usuario no encontrado - {}", uid);
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .body("Usuario no encontrado");
+        } catch (Exception e) {
+            log.error("Error inesperado al activar la cuenta: {}", e.getMessage());
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error al activar la cuenta");
+        }
+    }
+
     @PostMapping("/{uid}/upload-img")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR')")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR', 'ADMIN')")
     public ResponseEntity<?> uploadProfilePicture(
             @PathVariable String uid,
             @RequestParam("image") MultipartFile image) {
@@ -123,7 +146,7 @@ public class UserController {
         }
     }
     @GetMapping("/{uid}/get-personal-data")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR','ADMIN')")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'PROVEEDOR', 'ADMIN')")
     public ResponseEntity<CompleteUserDataDto> getPersonalData(@PathVariable String uid) {
         try {
             CompleteUserDataDto userData = this.userService.getPersonalDataUser(uid);
@@ -147,5 +170,9 @@ public class UserController {
             return ResponseEntity.ok(providerTypeDto);
         }
     }
-
+    @GetMapping("/get-user-list")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<DisableUserDto>>getAllActivesUsers(@RequestParam String roleName) {
+        return  ResponseEntity.ok(userService.getAllUsersActive(roleName));
+    }
 }

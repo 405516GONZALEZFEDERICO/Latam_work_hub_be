@@ -1,6 +1,5 @@
 package Latam.Latam.work.hub.repositories;
 
-import Latam.Latam.work.hub.dtos.common.reports.admin.BookingReportRowDto;
 import Latam.Latam.work.hub.entities.BookingEntity;
 import Latam.Latam.work.hub.enums.BookingStatus;
 import org.springframework.data.domain.Page;
@@ -10,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
@@ -22,6 +22,7 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
     @Query("SELECT b FROM BookingEntity b " +
             "WHERE b.space.id = :spaceId " +
             "AND b.active = true " +
+            "AND b.status != 'CANCELED' " +
             "AND (" +
             "  (b.bookingType = 'PER_HOUR' AND " +
             "   b.startDate = :startDate AND " +
@@ -86,41 +87,127 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
 
 
 
-    // Query principal simplificada
-    @Query(value = "SELECT b " +
+    @Query(value = """
+    SELECT b 
+    FROM BookingEntity b 
+    JOIN FETCH b.space s 
+    JOIN FETCH b.user c 
+    JOIN FETCH s.owner p 
+    WHERE (:startDateParam IS NULL OR DATE(b.startDate) >= :startDateParam) 
+    AND (:endDateParam IS NULL OR DATE(b.endDate) <= :endDateParam) 
+    AND (:clientIdParam IS NULL OR c.id = :clientIdParam) 
+    AND (:providerIdParam IS NULL OR p.id = :providerIdParam) 
+    AND (:spaceIdParam IS NULL OR s.id = :spaceIdParam) 
+    AND (:bookingStatusEnum IS NULL OR b.status = :bookingStatusEnum)
+""",
+            countQuery = """
+    SELECT COUNT(b) FROM BookingEntity b 
+    JOIN b.space s JOIN b.user c JOIN s.owner p 
+    WHERE (:startDateParam IS NULL OR DATE(b.startDate) >= :startDateParam) 
+    AND (:endDateParam IS NULL OR DATE(b.endDate) <= :endDateParam) 
+    AND (:clientIdParam IS NULL OR c.id = :clientIdParam) 
+    AND (:providerIdParam IS NULL OR p.id = :providerIdParam) 
+    AND (:spaceIdParam IS NULL OR s.id = :spaceIdParam) 
+    AND (:bookingStatusEnum IS NULL OR b.status = :bookingStatusEnum)
+""")
+    Page<BookingEntity> findBookingsForReport(
+            @Param("startDateParam") LocalDate startDateParam,
+            @Param("endDateParam") LocalDate endDateParam,
+            @Param("clientIdParam") Long clientIdParam,
+            @Param("providerIdParam") Long providerIdParam,
+            @Param("spaceIdParam") Long spaceIdParam,
+            @Param("bookingStatusEnum") BookingStatus bookingStatusEnum,
+            Pageable pageable
+    );
+//
+//    @Query("SELECT COUNT(b) FROM BookingEntity b WHERE b.startDate BETWEEN :start AND :end AND b.status = :status")
+//    long countByStartDateBetweenAndStatus(
+//            @Param("start") LocalDateTime start,
+//            @Param("end") LocalDateTime end,
+//            @Param("status") BookingStatus status
+//    );
+
+
+    @Query("SELECT COUNT(b) FROM BookingEntity b WHERE b.user.id = :userId")
+    Long countByUserId(@Param("userId") Long userId);
+
+
+    // HU1: Reservas este mes
+    @Query("SELECT COUNT(b) FROM BookingEntity b WHERE b.startDate >= :startOfMonth AND b.startDate <= :endOfMonth AND b.status IN :statuses")
+    long countReservationsInDateRangeWithStatuses(
+            @Param("startOfMonth") LocalDateTime startOfMonth,
+            @Param("endOfMonth") LocalDateTime endOfMonth,
+            @Param("statuses") List<BookingStatus> statuses
+    );
+
+    // HU3: Reservas por Tipo de Espacio
+    @Query("SELECT b.space.type.name, COUNT(b.id) FROM BookingEntity b WHERE b.space.type.name IS NOT NULL GROUP BY b.space.type.name ORDER BY COUNT(b.id) DESC")
+    List<Object[]> findReservationsCountBySpaceType();
+
+    // HU4: Mapa de calor de reservas por provincia/zona (usando City's divisionName)
+    // CUIDADO: Esta consulta puede ser lenta si hay muchos datos y no hay índices adecuados en las columnas unidas.
+    @Query("SELECT b.space.address.city.divisionName, COUNT(b.id) " +
             "FROM BookingEntity b " +
-            "JOIN FETCH b.space s " +
-            "JOIN FETCH b.user c " + // b.user es el cliente
-            "JOIN FETCH s.owner p " + // s.owner es el proveedor del espacio
-            "WHERE (:startDateParam IS NULL OR b.startDate >= :startDateParam) " +
-            "AND (:endDateParam IS NULL OR b.startDate <= :endDateParam) " + // Ajustar si el filtro es sobre b.endDate
-            "AND (:clientIdParam IS NULL OR c.id = :clientIdParam) " +
-            "AND (:providerIdParam IS NULL OR p.id = :providerIdParam) " +
-            "AND (:spaceIdParam IS NULL OR s.id = :spaceIdParam) " +
-            "AND (:bookingStatusEnum IS NULL OR b.status = :bookingStatusEnum)",
-            countQuery = "SELECT COUNT(b) FROM BookingEntity b JOIN b.space s JOIN b.user c JOIN s.owner p " +
-                    "WHERE (:startDateParam IS NULL OR b.startDate >= :startDateParam) " +
-                    "AND (:endDateParam IS NULL OR b.startDate <= :endDateParam) " +
-                    "AND (:clientIdParam IS NULL OR c.id = :clientIdParam) " +
-                    "AND (:providerIdParam IS NULL OR p.id = :providerIdParam) " +
-                    "AND (:spaceIdParam IS NULL OR s.id = :spaceIdParam) " +
-                    "AND (:bookingStatusEnum IS NULL OR b.status = :bookingStatusEnum)")
-    Page<BookingEntity> findBookingsForReport( // Devuelve Entidades
-                                               @Param("startDateParam") LocalDateTime startDateParam,
-                                               @Param("endDateParam") LocalDateTime endDateParam,
-                                               @Param("clientIdParam") Long clientIdParam,
-                                               @Param("providerIdParam") Long providerIdParam,
-                                               @Param("spaceIdParam") Long spaceIdParam,
-                                               @Param("bookingStatusEnum") BookingStatus bookingStatusEnum,
-                                               Pageable pageable
-    );
+            "WHERE b.space IS NOT NULL AND b.space.address IS NOT NULL AND b.space.address.city IS NOT NULL AND b.space.address.city.divisionName IS NOT NULL " +
+            "GROUP BY b.space.address.city.divisionName " +
+            "ORDER BY COUNT(b.id) DESC")
+    List<Object[]> findReservationsCountByZone();
 
 
-    @Query("SELECT COUNT(b) FROM BookingEntity b WHERE b.startDate BETWEEN :start AND :end AND b.status = :status")
-    long countByStartDateBetweenAndStatus(
-            @Param("start") LocalDateTime start,
-            @Param("end") LocalDateTime end,
-            @Param("status") BookingStatus status
+    // HU5: Histograma de horarios más alquilados.
+    // Devuelve LocalTime (initHour) y el conteo. El procesamiento para extraer la HORA (int) se hará en el servicio.
+    @Query("SELECT b.initHour, COUNT(b.id) FROM BookingEntity b WHERE b.status IN :statuses GROUP BY b.initHour ORDER BY b.initHour ASC")
+    List<Object[]> findReservationCountsByInitHour(@Param("statuses") List<BookingStatus> statuses);
+
+    @Query("SELECT SUM(CASE WHEN b.status = 'CANCELED' THEN -1 * COALESCE(b.refundAmount, 0) " +
+           "            ELSE (b.totalAmount - COALESCE(b.refundAmount, 0)) END) " +
+           "FROM BookingEntity b " +
+           "WHERE (b.status != 'PENDING_PAYMENT' AND b.status != 'DRAFT') " +
+           "AND b.startDate >= :startDate " +
+           "AND b.startDate <= :endDate")
+    Double sumTotalRevenueByDateRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
     );
+
+    @Query("SELECT b.startDate, (CASE WHEN b.status = 'CANCELED' THEN 0 ELSE (b.totalAmount - COALESCE(b.refundAmount, 0)) END) " +
+           "FROM BookingEntity b " +
+           "WHERE (b.status = :status OR b.status = 'COMPLETED') " +
+           "AND b.status != 'CANCELED' " +
+           "AND b.startDate >= :startDate " +
+           "ORDER BY b.startDate ASC")
+    List<Object[]> findRawMonthlyRevenueData(
+            @Param("status") BookingStatus status,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    @Query("SELECT b FROM BookingEntity b " +
+           "WHERE b.status IN (:statuses) " +
+           "AND b.startDate >= :startDate " +
+           "AND b.startDate <= :endDate")
+    List<BookingEntity> findBookingsForRevenueCalculation(
+            @Param("statuses") List<BookingStatus> statuses,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    @Query("SELECT b FROM BookingEntity b " +
+           "WHERE b.status IN (:statuses) " +
+           "AND b.startDate >= :startDate " +
+           "ORDER BY b.startDate ASC")
+    List<BookingEntity> findBookingsForMonthlyRevenueData(
+            @Param("statuses") List<BookingStatus> statuses,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    @Query("SELECT FUNCTION('YEAR', b.startDate) as year, FUNCTION('MONTH', b.startDate) as month, " +
+           "SUM(CASE WHEN b.status = 'CANCELED' THEN -1 * COALESCE(b.refundAmount, 0) " +
+           "     ELSE (b.totalAmount - COALESCE(b.refundAmount, 0)) END) as revenue " +
+           "FROM BookingEntity b " +
+           "WHERE (b.status != 'PENDING_PAYMENT' AND b.status != 'DRAFT') " +
+           "AND b.startDate >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', b.startDate), FUNCTION('MONTH', b.startDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlyRevenue(@Param("startDate") LocalDateTime startDate);
 
 }
