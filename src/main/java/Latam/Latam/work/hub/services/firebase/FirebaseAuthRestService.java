@@ -1,4 +1,4 @@
-package Latam.Latam.work.hub.services.rest.template.firebase;
+package Latam.Latam.work.hub.services.firebase;
 
 import org.springframework.stereotype.Service;
 

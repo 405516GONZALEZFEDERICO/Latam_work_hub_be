@@ -77,6 +77,8 @@ public class SpaceEntity {
 
     @OneToMany(mappedBy = "space", fetch = FetchType.LAZY)
     private List<BookingEntity> bookings;
+    @OneToMany(mappedBy = "space", fetch = FetchType.LAZY)
+    private List<RentalContractEntity> rentalContracts;
 }
 
 

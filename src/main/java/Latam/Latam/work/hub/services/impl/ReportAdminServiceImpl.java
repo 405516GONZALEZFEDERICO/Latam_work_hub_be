@@ -30,7 +30,6 @@ import Latam.Latam.work.hub.repositories.RentalContractRepository;
 import Latam.Latam.work.hub.repositories.SpaceRepository;
 import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.services.ReportAdminService;
-import lombok.AllArgsConstructor; // o @RequiredArgsConstructor si los campos son final
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,30 +76,27 @@ public class ReportAdminServiceImpl implements ReportAdminService {
             }
         }
         return null;
-    }
-
-    @Override
+    }@Override
     @Transactional(readOnly = true)
     public Page<SpaceReportRowDto> getSpacesReport(SpaceReportFiltersDto filters, Pageable pageable) {
         logger.info("Obteniendo informe de espacios con filtros: {} y paginación: {}", filters, pageable);
 
-        LocalDateTime filterStartDate = null;
-        LocalDateTime filterEndDate = null;
-        Long providerId = null;
         String spaceStatusParam = null;
-
-        if (filters != null) {
-
-            providerId = filters.getProviderId();
+        if (filters != null && filters.getStatus() != null && !filters.getStatus().trim().isEmpty()) {
             spaceStatusParam = filters.getStatus();
         }
 
-        Page<SpaceEntity> spacesPage = spaceRepository.findSpacesForReportPage(
-                providerId, spaceStatusParam, pageable
-        );
+        logger.info("Parámetro de estado procesado: '{}'", spaceStatusParam);
+
+        // Obtener espacios con paginación
+        Page<SpaceEntity> spacesPage = spaceRepository.findSpacesForReportPage(spaceStatusParam, pageable);
+
+        logger.info("Espacios encontrados: {} total, {} en esta página",
+                spacesPage.getTotalElements(), spacesPage.getContent().size());
 
         List<SpaceEntity> spacesOnPage = spacesPage.getContent();
         if (spacesOnPage.isEmpty()) {
+            logger.info("No se encontraron espacios, retornando página vacía");
             return new PageImpl<>(Collections.emptyList(), pageable, 0);
         }
 
@@ -108,86 +104,149 @@ public class ReportAdminServiceImpl implements ReportAdminService {
                 .map(SpaceEntity::getId)
                 .collect(Collectors.toList());
 
+        logger.info("IDs de espacios en esta página: {}", spaceIdsOnPage);
+
+        // 🔧 CONTAR RESERVAS ACTIVAS (no solo completadas)
         Map<Long, Long> bookingCountsMap = Collections.emptyMap();
         if (!spaceIdsOnPage.isEmpty()) {
-            bookingCountsMap = bookingRepository.countBookingsForSpacesInPeriod(
-                    spaceIdsOnPage, filterStartDate, filterEndDate, BookingStatus.COMPLETED // O el estado que consideres relevante
-            ).stream().collect(Collectors.toMap(obj -> (Long) obj[0], obj -> (Long) obj[1]));
+            try {
+                bookingCountsMap = bookingRepository.countActiveBookingsForSpaces(spaceIdsOnPage)
+                        .stream().collect(Collectors.toMap(
+                                obj -> (Long) obj[0],
+                                obj -> (Long) obj[1]
+                        ));
+                logger.info("Conteos de reservas por espacio: {}", bookingCountsMap);
+            } catch (Exception e) {
+                logger.error("Error al contar reservas activas: {}", e.getMessage(), e);
+                bookingCountsMap = Collections.emptyMap();
+            }
         }
 
+        Map<Long, Long> rentalCountsMap = Collections.emptyMap();
+        if (!spaceIdsOnPage.isEmpty()) {
+            try {
+                rentalCountsMap = rentalContractRepository.countActiveRentalContractForSpaces(spaceIdsOnPage)
+                        .stream().collect(Collectors.toMap(
+                                obj -> (Long) obj[0],
+                                obj -> (Long) obj[1]
+                        ));
+                logger.info("Conteos de contratos por espacio: {}", rentalCountsMap);
+            } catch (Exception e) {
+                logger.error("Error al contar contratos activos: {}", e.getMessage(), e);
+                rentalCountsMap = Collections.emptyMap();
+            }
+        }
 
+        // 🔧 SUMAR REVENUE DE BOOKINGS ACTIVOS
         Map<Long, Double> revenueFromBookingsMap = Collections.emptyMap();
         if (!spaceIdsOnPage.isEmpty()) {
-            revenueFromBookingsMap = invoiceRepository.sumRevenueForSpacesFromBookingsInPeriod(
-                    spaceIdsOnPage, filterStartDate, filterEndDate, InvoiceStatus.PAID
-            ).stream().collect(Collectors.toMap(obj -> (Long) obj[0], obj -> obj[1] != null ? ((Number) obj[1]).doubleValue() : 0.0));
+            try {
+                revenueFromBookingsMap = invoiceRepository.sumRevenueForActiveBookings(spaceIdsOnPage)
+                        .stream().collect(Collectors.toMap(
+                                obj -> (Long) obj[0],
+                                obj -> obj[1] != null ? ((Number) obj[1]).doubleValue() : 0.0
+                        ));
+                logger.info("Revenue de bookings por espacio: {}", revenueFromBookingsMap);
+            } catch (Exception e) {
+                logger.error("Error al calcular revenue de bookings: {}", e.getMessage(), e);
+                revenueFromBookingsMap = Collections.emptyMap();
+            }
         }
 
+        // Sumar TODOS los ingresos por contratos (sin filtro de fecha)
         Map<Long, Double> revenueFromContractsMap = Collections.emptyMap();
         if (!spaceIdsOnPage.isEmpty()) {
-            revenueFromContractsMap = invoiceRepository.sumRevenueForSpacesFromContractsInPeriod(
-                    spaceIdsOnPage, filterStartDate, filterEndDate, InvoiceStatus.PAID
-            ).stream().collect(Collectors.toMap(obj -> (Long) obj[0], obj -> obj[1] != null ? ((Number) obj[1]).doubleValue() : 0.0));
+            try {
+                revenueFromContractsMap = invoiceRepository.sumAllRevenueForSpacesFromContracts(
+                        spaceIdsOnPage, InvoiceStatus.PAID
+                ).stream().collect(Collectors.toMap(
+                        obj -> (Long) obj[0],
+                        obj -> obj[1] != null ? ((Number) obj[1]).doubleValue() : 0.0
+                ));
+                logger.info("Revenue de contratos por espacio: {}", revenueFromContractsMap);
+            } catch (Exception e) {
+                logger.error("Error al calcular revenue de contratos: {}", e.getMessage(), e);
+                revenueFromContractsMap = Collections.emptyMap();
+            }
         }
 
         final Map<Long, Long> finalBookingCountsMap = bookingCountsMap;
+        final Map<Long, Long> finalRentalCountsMap = rentalCountsMap;
         final Map<Long, Double> finalRevenueFromBookingsMap = revenueFromBookingsMap;
         final Map<Long, Double> finalRevenueFromContractsMap = revenueFromContractsMap;
 
-        List<SpaceReportRowDto> dtoList = spacesOnPage.stream().map(s -> {
-            String statusString;
-            if (s.getActive() && s.getAvailable() && !s.isDeleted()) statusString = "Disponible";
-            else if (s.getActive() && !s.getAvailable() && !s.isDeleted()) statusString = "Ocupado";
-            else if (!s.getActive()) statusString = "Inactivo";
-            else statusString = "Eliminado"; // O "Otro" si prefieres
+        // Convertir a DTOs
+        List<SpaceReportRowDto> dtoList = spacesOnPage.stream().map(space -> {
+            String statusString = determineSpaceStatus(space);
 
-            // Asegúrate de que SpaceReportRowDto tenga un constructor o setters adecuados
             SpaceReportRowDto dto = new SpaceReportRowDto();
-            dto.setSpaceId(s.getId());
-            dto.setSpaceName(s.getName());
-            if (s.getOwner() != null) {
-                dto.setProviderName(s.getOwner().getName());
-            } else {
-                dto.setProviderName("N/A");
+            dto.setSpaceId(space.getId());
+            dto.setName(space.getName());
+
+            if (space.getOwner() != null) {
+                dto.setOwner(space.getOwner().getName());
             }
+
             dto.setStatus(statusString);
-            dto.setBookingCount(finalBookingCountsMap.getOrDefault(s.getId(), 0L));
-            double revBookings = finalRevenueFromBookingsMap.getOrDefault(s.getId(), 0.0);
-            double revContracts = finalRevenueFromContractsMap.getOrDefault(s.getId(), 0.0);
+
+            // 🔧 USAR CONTEO DE RESERVAS ACTIVAS
+            Long bookingCount = finalBookingCountsMap.getOrDefault(space.getId(), 0L);
+            Long rentalCount = finalRentalCountsMap.getOrDefault(space.getId(), 0L);
+            dto.setRentalCount(rentalCount);
+            dto.setBookingCount(bookingCount);
+
+            double revBookings = finalRevenueFromBookingsMap.getOrDefault(space.getId(), 0.0);
+            double revContracts = finalRevenueFromContractsMap.getOrDefault(space.getId(), 0.0);
             dto.setRevenueGenerated(revBookings + revContracts);
+
+            logger.debug("Espacio {}: {} reservas, ${} revenue total",
+                    space.getId(), bookingCount, (revBookings + revContracts));
+
             return dto;
         }).collect(Collectors.toList());
+
+        logger.info("DTOs generados: {}", dtoList.size());
 
         return new PageImpl<>(dtoList, pageable, spacesPage.getTotalElements());
     }
 
+    // 🔧 MÉTODO HELPER PARA DETERMINAR ESTADO
+    private String determineSpaceStatus(SpaceEntity space) {
+        if (space.isDeleted()) {
+            return "Eliminado";
+        }
 
+        if (!space.getActive()) {
+            return "Inactivo";
+        }
+
+        if (space.getActive() && space.getAvailable()) {
+            return "Disponible";
+        }
+
+        if (space.getActive() && !space.getAvailable()) {
+            return "Ocupado";
+        }
+
+        return "Activo"; // fallback
+    }
  @Override
  @Transactional(readOnly = true)
  public Page<BookingReportRowDto> getBookingsReport(BookingReportFiltersDto filters, Pageable pageable) {
      logger.info("Obteniendo informe de bookings con filtros: {} y paginación: {}", filters, pageable);
      LocalDate startDateParam = null;
      LocalDate endDateParam = null;
-     Long clientIdParam = null;
-     Long providerIdParam = null;
-     Long spaceIdParam = null;
      BookingStatus bookingStatusEnum = null;
 
      if (filters != null) {
          startDateParam = filters.getStartDate(); // Ya es LocalDate, no necesita conversión
          endDateParam = filters.getEndDate();     // Ya es LocalDate, no necesita conversión
-         clientIdParam = filters.getClientId();
-         providerIdParam = filters.getProviderId();
-         spaceIdParam = filters.getSpaceId();
          bookingStatusEnum = safeEnumValueOf(BookingStatus.class, filters.getStatus(), "status de reserva");
      }
 
      Page<BookingEntity> bookingsPage = bookingRepository.findBookingsForReport(
              startDateParam,
              endDateParam,
-             clientIdParam,
-             providerIdParam,
-             spaceIdParam,
              bookingStatusEnum,
              pageable
      );
@@ -240,9 +299,9 @@ public class ReportAdminServiceImpl implements ReportAdminService {
 
             if (StringUtils.hasText(filters.getStatus())) {
                 String statusFilter = filters.getStatus().trim();
-                if ("activo".equalsIgnoreCase(statusFilter)) {
+                if ("active".equalsIgnoreCase(statusFilter)) {
                     isEnabledQueryParam = true;
-                } else if ("inactivo".equalsIgnoreCase(statusFilter)) {
+                } else if ("inactive".equalsIgnoreCase(statusFilter)) {
                     isEnabledQueryParam = false;
                 } else {
                     logger.warn("Valor de filtro de estado de usuario no reconocido: '{}'. No se filtrará por estado.", statusFilter);
@@ -298,20 +357,18 @@ public class ReportAdminServiceImpl implements ReportAdminService {
         logger.info("Obteniendo informe de contratos con filtros: {} y paginación: {}", filters, pageable);
         LocalDate filterContractStartDate = null;
         LocalDate filterContractEndDate = null;
-        Long tenantId = null;
-        Long ownerId = null;
+
         ContractStatus contractStatusEnum = null;
 
         if (filters != null) {
             filterContractStartDate = filters.getContractStartDate();
             filterContractEndDate = filters.getContractEndDate();
-            tenantId = filters.getTenantId();
-            ownerId = filters.getOwnerId();
+
             contractStatusEnum = safeEnumValueOf(ContractStatus.class, filters.getStatus(), "status de contrato");
         }
 
         Page<RentalContractEntity> contractsPage = rentalContractRepository.findContractsForReport(
-                filterContractStartDate, filterContractEndDate, tenantId, ownerId, contractStatusEnum, pageable
+                filterContractStartDate, filterContractEndDate, contractStatusEnum, pageable
         );
 
         List<ContractReportRowDto> dtoList = contractsPage.getContent().stream().map(rc -> {
@@ -349,17 +406,15 @@ public class ReportAdminServiceImpl implements ReportAdminService {
         logger.info("Obteniendo informe de facturas con filtros: {} y paginación: {}", filters, pageable);
         LocalDateTime filterIssueStartDate = null;
         LocalDateTime filterIssueEndDate = null;
-        Long clientId = null;
         InvoiceStatus invoiceStatusEnum = null;
 
         if (filters != null) {
             filterIssueStartDate = filters.getStartDate(); // Para fecha de emisión
-            clientId = filters.getClientId();
             invoiceStatusEnum = safeEnumValueOf(InvoiceStatus.class, filters.getStatus(), "status de factura");
         }
 
         Page<InvoiceEntity> invoicesPage = invoiceRepository.findInvoicesForReport(
-                filterIssueStartDate, filterIssueEndDate, clientId, invoiceStatusEnum, pageable
+                filterIssueStartDate, filterIssueEndDate, invoiceStatusEnum, pageable
         );
 
         List<InvoiceReportRowDto> dtoList = invoicesPage.getContent().stream().map(i -> {

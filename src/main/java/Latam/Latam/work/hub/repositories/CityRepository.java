@@ -8,6 +8,6 @@ import java.util.List;
 
 @Repository
 public interface CityRepository extends JpaRepository<CityEntity, Long> {
-
+    CityEntity findByName(String name);
     List<CityEntity>findByCountryId(Long countryId);
 }

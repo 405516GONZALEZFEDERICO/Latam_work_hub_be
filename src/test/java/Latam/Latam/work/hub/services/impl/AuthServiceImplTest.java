@@ -7,7 +7,7 @@ import Latam.Latam.work.hub.security.dtos.AuthResponseDto;
 import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
 import Latam.Latam.work.hub.services.UserService;
-import Latam.Latam.work.hub.services.rest.template.firebase.impl.FirebaseAuthRestServiceImpl;
+import Latam.Latam.work.hub.services.firebase.impl.FirebaseAuthRestServiceImpl;
 import com.google.firebase.auth.AuthErrorCode;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;

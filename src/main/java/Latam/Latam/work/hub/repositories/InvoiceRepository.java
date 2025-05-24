@@ -67,7 +67,18 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
      */
     @Query("SELECT i FROM InvoiceEntity i WHERE DATE(i.dueDate) = :dueDate " +
             "AND (i.status = 'DRAFT' OR i.status = 'ISSUED')")
-    List<InvoiceEntity> findInvoicesExpiringOn(@Param("dueDate") LocalDate dueDate);
+    List<InvoiceEntity> findInvoicesExpiringOn(@Param("dueDate")
+                                               LocalDate dueDate);
+    @Query("SELECT i.rentalContract.space.id, SUM(i.totalAmount) " +
+            "FROM InvoiceEntity i " +
+            "WHERE i.rentalContract.space.id IN :spaceIds " +
+            "AND i.status = :status " +
+            "AND i.rentalContract IS NOT NULL " +
+            "GROUP BY i.rentalContract.space.id")
+    List<Object[]> sumAllRevenueForSpacesFromContracts(
+            @Param("spaceIds") List<Long> spaceIds,
+            @Param("status") InvoiceStatus status
+    );
 
 
 
@@ -81,31 +92,21 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
     );
 
 
-    @Query("SELECT bk.space.id AS spaceId, SUM(inv.totalAmount - COALESCE(inv.refundAmount, 0)) AS totalRevenue " +
-            "FROM InvoiceEntity inv JOIN inv.booking bk " +
-            "WHERE bk.space.id IN :spaceIds AND inv.status = :status " +
-            "  AND (:startDate IS NULL OR inv.issueDate >= :startDate) " +
-            "  AND (:endDate IS NULL OR inv.issueDate <= :endDate) " +
-            "GROUP BY bk.space.id")
-    List<Object[]> sumRevenueForSpacesFromBookingsInPeriod(
-            @Param("spaceIds") List<Long> spaceIds,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate,
-            @Param("status") InvoiceStatus status
-    );
 
-    @Query("SELECT rc_entity.space.id AS spaceId, SUM(inv.totalAmount - COALESCE(inv.refundAmount, 0)) AS totalRevenue " + 
-            "FROM InvoiceEntity inv JOIN inv.rentalContract rc_entity " + 
-            "WHERE rc_entity.space.id IN :spaceIds AND inv.status = :status " +
-            "  AND (:startDate IS NULL OR inv.issueDate >= :startDate) " +
-            "  AND (:endDate IS NULL OR inv.issueDate <= :endDate) " +
-            "GROUP BY rc_entity.space.id")
-    List<Object[]> sumRevenueForSpacesFromContractsInPeriod(
-            @Param("spaceIds") List<Long> spaceIds,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate,
-            @Param("status") InvoiceStatus status
-    );
+
+
+
+
+    @Query("SELECT i.booking.space.id, SUM(i.totalAmount) " +
+            "FROM InvoiceEntity i " +
+            "WHERE i.booking.space.id IN :spaceIds " +
+            "AND i.status = 'PAID' " +
+            "AND i.booking IS NOT NULL " +
+            "AND (i.booking.status = 'CONFIRMED' OR i.booking.status = 'COMPLETED' OR i.booking.status = 'ACTIVE') " +
+            "GROUP BY i.booking.space.id")
+    List<Object[]> sumRevenueForActiveBookings(@Param("spaceIds") List<Long> spaceIds);
+
+
 
 
 
@@ -130,10 +131,7 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
     LEFT JOIN FETCH b.user bc
     LEFT JOIN FETCH i.rentalContract rcontract 
     LEFT JOIN FETCH rcontract.tenant rct
-    WHERE (:clientId IS NULL OR 
-          EXISTS (SELECT 1 FROM BookingEntity bb WHERE bb.id = i.booking.id AND bb.user.id = :clientId) OR 
-          EXISTS (SELECT 1 FROM RentalContractEntity rc WHERE rc.id = i.rentalContract.id AND rc.tenant.id = :clientId))
-    AND (:filterStartDate IS NULL OR i.issueDate >= :filterStartDate)
+    WHERE (:filterStartDate IS NULL OR i.issueDate >= :filterStartDate)
     AND (:filterEndDate IS NULL OR i.issueDate <= :filterEndDate)
     AND (:invoiceStatusEnum IS NULL OR i.status = :invoiceStatusEnum)
 """,
@@ -144,17 +142,13 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, Long> {
     LEFT JOIN b.user bc
     LEFT JOIN i.rentalContract rcontract 
     LEFT JOIN rcontract.tenant rct
-    WHERE (:clientId IS NULL OR 
-          EXISTS (SELECT 1 FROM BookingEntity bb WHERE bb.id = i.booking.id AND bb.user.id = :clientId) OR 
-          EXISTS (SELECT 1 FROM RentalContractEntity rc WHERE rc.id = i.rentalContract.id AND rc.tenant.id = :clientId))
-    AND (:filterStartDate IS NULL OR i.issueDate >= :filterStartDate)
+    WHERE (:filterStartDate IS NULL OR i.issueDate >= :filterStartDate)
     AND (:filterEndDate IS NULL OR i.issueDate <= :filterEndDate)
     AND (:invoiceStatusEnum IS NULL OR i.status = :invoiceStatusEnum)
 """)
     Page<InvoiceEntity> findInvoicesForReport(
             @Param("filterStartDate") LocalDateTime filterStartDate,
-            @Param("filterEndDate") LocalDateTime filterEndDate, // Este parámetro seguirá existiendo en la firma
-            @Param("clientId") Long clientId,
+            @Param("filterEndDate") LocalDateTime filterEndDate,
             @Param("invoiceStatusEnum") InvoiceStatus invoiceStatusEnum,
             Pageable pageable
     );

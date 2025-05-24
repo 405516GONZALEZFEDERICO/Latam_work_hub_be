@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface RentalContractRepository extends JpaRepository<RentalContractEntity, Long> {
@@ -19,7 +20,6 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
      * Encuentra todos los contratos de un inquilino por su ID
      */
     List<RentalContractEntity> findByTenantId(Long tenantId);
-
     /**
      * Encuentra todos los contratos activos que necesitan facturación mensual
      */
@@ -31,6 +31,13 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
      * Encuentra contratos por espacio
      */
     List<RentalContractEntity> findBySpaceId(Long spaceId);
+
+    /**
+     * Encuentra contratos por espacio y estado
+     */
+    @Query("SELECT rc FROM RentalContractEntity rc WHERE rc.contractStatus = :status AND rc.startDate = :startDate")
+    List<RentalContractEntity> findByContractStatusAndStartDate(@Param("status") ContractStatus status, @Param("startDate") LocalDate startDate);
+
 
     /**
      * Encuentra contratos por usuario (Firebase UID)
@@ -92,39 +99,30 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
             LocalDate threshold);
 
 
-    // Query principal simplificada
     @Query(value = """
     SELECT DISTINCT rc
     FROM RentalContractEntity rc
-    JOIN FETCH rc.space s 
+    JOIN FETCH rc.space s
     JOIN FETCH s.owner o
     JOIN FETCH rc.tenant t
-    WHERE (:startDate IS NULL OR rc.startDate = :startDate)
-    AND (:endDate IS NULL OR rc.endDate = :endDate)
-    AND (:tenantId IS NULL OR rc.tenant.id = :tenantId)
-    AND (:ownerId IS NULL OR s.owner.id = :ownerId)
+    WHERE (:startDate IS NULL OR rc.startDate BETWEEN :startDate AND :endDate)
     AND (:status IS NULL OR rc.contractStatus = :status)
 """,
             countQuery = """
     SELECT COUNT(DISTINCT rc)
     FROM RentalContractEntity rc
-    JOIN rc.space s 
+    JOIN rc.space s
     JOIN s.owner o
     JOIN rc.tenant t
-    WHERE (:startDate IS NULL OR rc.startDate = :startDate)
-    AND (:endDate IS NULL OR rc.endDate = :endDate)
-    AND (:tenantId IS NULL OR rc.tenant.id = :tenantId)
-    AND (:ownerId IS NULL OR s.owner.id = :ownerId)
+    WHERE (:startDate IS NULL OR rc.startDate BETWEEN :startDate AND :endDate)
     AND (:status IS NULL OR rc.contractStatus = :status)
 """)
-    Page<RentalContractEntity> findContractsForReport(
-            @Param("startDate") LocalDate startDate,
-            @Param("endDate") LocalDate endDate,
-            @Param("tenantId") Long tenantId,
-            @Param("ownerId") Long ownerId,
-            @Param("status") ContractStatus status,
-            Pageable pageable
-    );
+  Page<RentalContractEntity> findContractsForReport(
+          @Param("startDate") LocalDate startDate,
+          @Param("endDate") LocalDate endDate,
+          @Param("status") ContractStatus status,
+          Pageable pageable
+  );
 
     // Query para Alertas simplificada
     @Query(value = "SELECT rc " +
@@ -174,5 +172,26 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
             @Param("futureDate") LocalDate futureDate
     );
 
+    @Query("SELECT r.space.id, COUNT(r.id) " +
+            "FROM RentalContractEntity r " +
+            "WHERE r.space.id IN :spaceIds " +
+            "AND r.contractStatus IN ('ACTIVE', 'PENDING','CANCELLED','CONFIRMED') " +
+            "GROUP BY r.space.id")
+    List<Object[]> countActiveRentalContractForSpaces(@Param("spaceIds") List<Long> spaceIds);
 
+
+    @Query("""
+    SELECT s.type.name as spaceType, COUNT(rc.id) as contractCount
+    FROM RentalContractEntity rc
+    JOIN rc.space s
+    WHERE rc.contractStatus = 'ACTIVE'
+    GROUP BY s.type.name
+""")
+    List<Object[]> findContractsCountBySpaceType();
+
+    Optional<RentalContractEntity> findBySpaceIdAndContractStatusAndEndDateGreaterThanEqual(
+            Long spaceId,
+            ContractStatus status,
+            LocalDate date
+    );
 }

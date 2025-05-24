@@ -53,14 +53,6 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
             "AND (b.endDate IS NULL OR b.endDate > :now)")
     List<BookingEntity> findUpcomingBookings(@Param("now") LocalDateTime now);
 
-    /**
-     * Busca reservas activas cuya fecha de finalización ha pasado
-     */
-    @Query("SELECT b FROM BookingEntity b " +
-            "WHERE b.status = 'ACTIVE' " +
-            "AND ((b.endDate IS NOT NULL AND b.endDate < :now) " +
-            "     OR (b.endDate IS NULL AND b.startDate < :now AND b.bookingType = 'PER_DAY'))")
-    List<BookingEntity> findExpiredBookings(@Param("now") LocalDateTime now);
 
 
     @Query("SELECT b FROM BookingEntity b WHERE b.user.firebaseUid = :uid " +
@@ -71,20 +63,23 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
             Pageable pageable);
 
 
-    @Query("SELECT b.space.id AS spaceId, COUNT(b.id) AS count " +
+
+    @Query("SELECT b.space.id, COUNT(b) " +
             "FROM BookingEntity b " +
-            "WHERE b.space.id IN :spaceIds AND b.status = :status " +
-            "  AND (:startDate IS NULL OR b.startDate >= :startDate) " +
-            "  AND (:endDate IS NULL OR b.startDate <= :endDate) " +
+            "WHERE b.space.id IN :spaceIds " +
+            "AND b.status = :status " +
             "GROUP BY b.space.id")
-    List<Object[]> countBookingsForSpacesInPeriod(
+    List<Object[]> countAllBookingsForSpaces(
             @Param("spaceIds") List<Long> spaceIds,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate,
             @Param("status") BookingStatus status
     );
 
-
+    @Query("SELECT b.space.id, COUNT(b) " +
+            "FROM BookingEntity b " +
+            "WHERE b.space.id IN :spaceIds " +
+            "AND (b.status = 'CONFIRMED' OR b.status = 'COMPLETED' OR b.status = 'ACTIVE') " +
+            "GROUP BY b.space.id")
+    List<Object[]> countActiveBookingsForSpaces(@Param("spaceIds") List<Long> spaceIds);
 
 
     @Query(value = """
@@ -95,9 +90,6 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
     JOIN FETCH s.owner p 
     WHERE (:startDateParam IS NULL OR DATE(b.startDate) >= :startDateParam) 
     AND (:endDateParam IS NULL OR DATE(b.endDate) <= :endDateParam) 
-    AND (:clientIdParam IS NULL OR c.id = :clientIdParam) 
-    AND (:providerIdParam IS NULL OR p.id = :providerIdParam) 
-    AND (:spaceIdParam IS NULL OR s.id = :spaceIdParam) 
     AND (:bookingStatusEnum IS NULL OR b.status = :bookingStatusEnum)
 """,
             countQuery = """
@@ -105,27 +97,15 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
     JOIN b.space s JOIN b.user c JOIN s.owner p 
     WHERE (:startDateParam IS NULL OR DATE(b.startDate) >= :startDateParam) 
     AND (:endDateParam IS NULL OR DATE(b.endDate) <= :endDateParam) 
-    AND (:clientIdParam IS NULL OR c.id = :clientIdParam) 
-    AND (:providerIdParam IS NULL OR p.id = :providerIdParam) 
-    AND (:spaceIdParam IS NULL OR s.id = :spaceIdParam) 
     AND (:bookingStatusEnum IS NULL OR b.status = :bookingStatusEnum)
 """)
     Page<BookingEntity> findBookingsForReport(
             @Param("startDateParam") LocalDate startDateParam,
             @Param("endDateParam") LocalDate endDateParam,
-            @Param("clientIdParam") Long clientIdParam,
-            @Param("providerIdParam") Long providerIdParam,
-            @Param("spaceIdParam") Long spaceIdParam,
             @Param("bookingStatusEnum") BookingStatus bookingStatusEnum,
             Pageable pageable
     );
-//
-//    @Query("SELECT COUNT(b) FROM BookingEntity b WHERE b.startDate BETWEEN :start AND :end AND b.status = :status")
-//    long countByStartDateBetweenAndStatus(
-//            @Param("start") LocalDateTime start,
-//            @Param("end") LocalDateTime end,
-//            @Param("status") BookingStatus status
-//    );
+
 
 
     @Query("SELECT COUNT(b) FROM BookingEntity b WHERE b.user.id = :userId")
@@ -144,14 +124,8 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
     @Query("SELECT b.space.type.name, COUNT(b.id) FROM BookingEntity b WHERE b.space.type.name IS NOT NULL GROUP BY b.space.type.name ORDER BY COUNT(b.id) DESC")
     List<Object[]> findReservationsCountBySpaceType();
 
-    // HU4: Mapa de calor de reservas por provincia/zona (usando City's divisionName)
-    // CUIDADO: Esta consulta puede ser lenta si hay muchos datos y no hay índices adecuados en las columnas unidas.
-    @Query("SELECT b.space.address.city.divisionName, COUNT(b.id) " +
-            "FROM BookingEntity b " +
-            "WHERE b.space IS NOT NULL AND b.space.address IS NOT NULL AND b.space.address.city IS NOT NULL AND b.space.address.city.divisionName IS NOT NULL " +
-            "GROUP BY b.space.address.city.divisionName " +
-            "ORDER BY COUNT(b.id) DESC")
-    List<Object[]> findReservationsCountByZone();
+
+
 
 
     // HU5: Histograma de horarios más alquilados.
@@ -209,5 +183,15 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
            "GROUP BY FUNCTION('YEAR', b.startDate), FUNCTION('MONTH', b.startDate) " +
            "ORDER BY year ASC, month ASC")
     List<Object[]> findMonthlyRevenue(@Param("startDate") LocalDateTime startDate);
+
+
+
+
+    @Query("SELECT COUNT(b) FROM BookingEntity b " +
+            "WHERE b.space.id = :spaceId " +
+            "AND (b.startDate <= :endDate AND b.endDate >= :startDate)")
+    long countConflictingBookings(@Param("spaceId") Long spaceId,
+                                  @Param("startDate") LocalDate startDate,
+                                  @Param("endDate") LocalDate endDate);
 
 }

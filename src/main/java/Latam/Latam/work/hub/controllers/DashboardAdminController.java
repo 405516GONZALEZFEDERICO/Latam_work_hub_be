@@ -4,7 +4,7 @@ import Latam.Latam.work.hub.dtos.common.dashboard.admin.KpiCardsDto;
 import Latam.Latam.work.hub.dtos.common.dashboard.admin.MonthlyRevenueDto;
 import Latam.Latam.work.hub.dtos.common.dashboard.admin.PeakHoursDto;
 import Latam.Latam.work.hub.dtos.common.dashboard.admin.ReservationsBySpaceTypeDto;
-import Latam.Latam.work.hub.dtos.common.dashboard.admin.ReservationsByZoneDto;
+import Latam.Latam.work.hub.dtos.common.dashboard.admin.TopSpacesDto;
 import Latam.Latam.work.hub.services.DashboardAdminService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -55,14 +55,6 @@ public class DashboardAdminController {
         return ResponseEntity.ok(data);
     }
 
-    /**
-     * HU4: Endpoint para el mapa de calor de reservas por provincia/zona.
-     */
-    @GetMapping("/reservations-by-zone")
-    public ResponseEntity<List<ReservationsByZoneDto>> getReservationsByZone() {
-        List<ReservationsByZoneDto> data = dashboardAdminService.getReservationsByZone();
-        return ResponseEntity.ok(data);
-    }
 
     /**
      * HU5: Endpoint para el histograma de horarios más alquilados.
@@ -70,6 +62,16 @@ public class DashboardAdminController {
     @GetMapping("/peak-reservation-hours")
     public ResponseEntity<List<PeakHoursDto>> getPeakReservationHours() {
         List<PeakHoursDto> data = dashboardAdminService.getPeakReservationHours();
+        return ResponseEntity.ok(data);
+    }
+    @GetMapping("/top-5-spaces")
+    public ResponseEntity<List<TopSpacesDto>> getTop5Spaces() {
+        List<TopSpacesDto> data = dashboardAdminService.getTop5Spaces();
+        return ResponseEntity.ok(data);
+    }
+    @GetMapping("/rental-contracts-by-space-type")
+    public ResponseEntity<List<ReservationsBySpaceTypeDto>> getRentalContractsBySpaceType() {
+        List<ReservationsBySpaceTypeDto> data = dashboardAdminService.getRentalContractsBySpaceType();
         return ResponseEntity.ok(data);
     }
 }

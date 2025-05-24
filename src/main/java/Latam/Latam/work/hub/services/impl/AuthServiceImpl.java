@@ -1,14 +1,18 @@
 package Latam.Latam.work.hub.services.impl;
 
+import Latam.Latam.work.hub.dtos.common.RoleChangeDto;
+import Latam.Latam.work.hub.entities.RoleEntity;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.exceptions.AuthException;
+import Latam.Latam.work.hub.repositories.RoleRepository;
 import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.security.dtos.AuthResponseDto;
 import Latam.Latam.work.hub.security.dtos.FirebaseUserInfoDto;
 import Latam.Latam.work.hub.services.AuthService;
 import Latam.Latam.work.hub.services.FirebaseRoleService;
 import Latam.Latam.work.hub.services.UserService;
-import Latam.Latam.work.hub.services.rest.template.firebase.impl.FirebaseAuthRestServiceImpl;
+import Latam.Latam.work.hub.services.firebase.FirebaseAuthRestService;
+import Latam.Latam.work.hub.services.firebase.impl.FirebaseAuthRestServiceImpl;
 import com.google.firebase.auth.AuthErrorCode;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
@@ -16,20 +20,28 @@ import com.google.firebase.auth.UserRecord;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
 import java.util.Optional;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AuthServiceImpl implements AuthService {
+    @Autowired
+    private  UserRepository userRepository;
+    @Autowired
+    private RoleRepository roleRepository;
+    @Autowired
+    private  UserService userService;
+    @Autowired
 
-    private final UserRepository userRepository;
-    private final UserService userService;
-    private final FirebaseRoleService firebaseRoleService;
-    private final FirebaseAuthRestServiceImpl authRestService;
+    private  FirebaseRoleService firebaseRoleService;
+    @Qualifier("firebaseAuthRestServiceImpl")
+    @Autowired
+    private FirebaseAuthRestService authRestService;
 
     @Override
     @Transactional
@@ -153,6 +165,27 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    @Override
+    public String changeRol(RoleChangeDto roleChangeDto) {
+      UserEntity userEntity=this.userRepository.findByFirebaseUid(roleChangeDto.getUid()).orElseThrow();
+        if (userEntity != null) {
+            String newRole = roleChangeDto.getRoleName();
+            String uid = roleChangeDto.getUid();
+
+            try {
+                firebaseRoleService.assignRolFirebaseUser(uid, newRole);
+                RoleEntity role=this.roleRepository.findByName(newRole).orElseThrow();
+                userEntity.setRole(role);
+                userRepository.save(userEntity);
+                return "Rol cambiado exitosamente a: " + newRole;
+            } catch (FirebaseAuthException e) {
+                log.error("Error al cambiar rol en Firebase: {}", e.getMessage());
+                throw new AuthException("Error al cambiar rol en Firebase: " + e.getMessage());
+            }
+        }
+
+        return "";
+    }
 
 
 }

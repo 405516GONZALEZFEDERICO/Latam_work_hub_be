@@ -76,4 +76,6 @@ public interface RentalContractService {
             Pageable pageable);
     String generateInvoicePaymentLink(Long invoiceId);
     void processCompletedContractsAndDeposits();
+
+    void updateConfirmedToActiveContracts();
 }

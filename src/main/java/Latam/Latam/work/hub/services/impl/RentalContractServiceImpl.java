@@ -19,6 +19,7 @@ import Latam.Latam.work.hub.repositories.InvoiceRepository;
 import Latam.Latam.work.hub.repositories.RentalContractRepository;
 import Latam.Latam.work.hub.repositories.SpaceRepository;
 import Latam.Latam.work.hub.repositories.UserRepository;
+import Latam.Latam.work.hub.services.BookingService;
 import Latam.Latam.work.hub.services.InvoiceService;
 import Latam.Latam.work.hub.services.MailService;
 import Latam.Latam.work.hub.services.RentalContractService;
@@ -63,7 +64,7 @@ public class RentalContractServiceImpl implements RentalContractService {
     private final StateMachineContract stateMachine;
     private final ContractPolicyService policyService;
     private final NotificationRetryService notificationRetryService;
-
+    private final BookingService bookingService;
     @Override
     @Transactional
     public void checkOverdueInvoices() {
@@ -208,7 +209,8 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
         
         for (RentalContractEntity existingContract : existingContracts) {
             if (existingContract.getContractStatus() == ContractStatus.ACTIVE ||
-                existingContract.getContractStatus() == ContractStatus.PENDING) {
+                existingContract.getContractStatus() == ContractStatus.PENDING ||
+                    existingContract.getContractStatus()==ContractStatus.CONFIRMED)  {
                 
                 if ((startDate.isBefore(existingContract.getEndDate()) && 
                      endDate.isAfter(existingContract.getStartDate()))) {
@@ -911,6 +913,18 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
 
     @Override
     public String generateInvoicePaymentLink(Long invoiceId) {
+//        contractDto.getStartDate().plusMonths(contractDto.getDurationMonths()));
+
+        InvoiceEntity invoiceEntity=this.invoiceRepository.findById(invoiceId).orElse(null);
+        RentalContractEntity rentalContract = invoiceEntity.getRentalContract();
+        Long spaceID = rentalContract.getSpace().getId();
+        LocalDate startDate = rentalContract.getStartDate();
+        LocalDate endDate = startDate.plusMonths(rentalContract.getDurationMonths().longValue());
+
+        // Validar solapamiento de contratos y reservas
+        bookingService.validateContractAndBookingOverlap(spaceID, startDate, endDate);
+
+
         InvoiceEntity invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
 
@@ -990,6 +1004,24 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
             } catch (Exception e) {
                 log.error("Error procesando contrato {}: {}", contract.getId(), e.getMessage());
             }
+        }
+    }
+
+    @Override
+    public void updateConfirmedToActiveContracts() {
+        LocalDate today = LocalDate.now();
+
+        // Filtrar contratos directamente en la base de datos
+        List<RentalContractEntity> confirmedContracts = rentalContractRepository.findByContractStatusAndStartDate(ContractStatus.CONFIRMED, today);
+
+        if (confirmedContracts.isEmpty()) {
+            return;
+        }
+
+
+        for (RentalContractEntity contract : confirmedContracts) {
+            contract.setContractStatus(ContractStatus.ACTIVE);
+            rentalContractRepository.save(contract);
         }
     }
 

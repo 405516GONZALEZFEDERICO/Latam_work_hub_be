@@ -4,12 +4,9 @@ import Latam.Latam.work.hub.dtos.common.dashboard.admin.KpiCardsDto;
 import Latam.Latam.work.hub.dtos.common.dashboard.admin.MonthlyRevenueDto;
 import Latam.Latam.work.hub.dtos.common.dashboard.admin.PeakHoursDto;
 import Latam.Latam.work.hub.dtos.common.dashboard.admin.ReservationsBySpaceTypeDto;
-import Latam.Latam.work.hub.dtos.common.dashboard.admin.ReservationsByZoneDto;
-import Latam.Latam.work.hub.entities.BookingEntity;
-import Latam.Latam.work.hub.entities.InvoiceEntity;
+import Latam.Latam.work.hub.dtos.common.dashboard.admin.TopSpacesDto;
 import Latam.Latam.work.hub.enums.BookingStatus;
 import Latam.Latam.work.hub.enums.ContractStatus;
-import Latam.Latam.work.hub.enums.InvoiceStatus;
 import Latam.Latam.work.hub.repositories.BookingRepository;
 import Latam.Latam.work.hub.repositories.InvoiceRepository;
 import Latam.Latam.work.hub.repositories.RentalContractRepository;
@@ -19,6 +16,8 @@ import Latam.Latam.work.hub.services.DashboardAdminService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -193,14 +192,7 @@ public class DashboardAdminServiceImpl implements DashboardAdminService {
                 .collect(Collectors.toList());
     }
 
-    @Override
-    public List<ReservationsByZoneDto> getReservationsByZone() {
-        log.debug("Fetching reservations by zone");
-        return bookingRepository.findReservationsCountByZone().stream()
-                .filter(row -> row != null && row.length == 2 && row[0] instanceof String && row[1] instanceof Long)
-                .map(row -> new ReservationsByZoneDto((String) row[0], (Long) row[1]))
-                .collect(Collectors.toList());
-    }
+
 
     @Override
     public List<PeakHoursDto> getPeakReservationHours() {
@@ -219,5 +211,29 @@ public class DashboardAdminServiceImpl implements DashboardAdminService {
             result.add(new PeakHoursDto(hour, reservationsByHourOfDay.getOrDefault(hour, 0L)));
         }
         return result;
+    }
+
+
+        @Override
+        public List<ReservationsBySpaceTypeDto> getRentalContractsBySpaceType() {
+            log.debug("Obteniendo cantidad de contratos por tipo de espacio");
+            List<Object[]> results = rentalContractRepository.findContractsCountBySpaceType();
+
+            return results.stream()
+                .filter(row -> row != null && row.length == 2)
+                .map(row -> new ReservationsBySpaceTypeDto(
+                    row[0] != null ? row[0].toString() : "Sin tipo",
+                    row[1] != null ? ((Number) row[1]).longValue() : 0L
+                ))
+                .collect(Collectors.toList());
+        }
+    @Override
+    public List<TopSpacesDto> getTop5Spaces() {
+        log.debug("Fetching top 5 spaces by rentals and reservations");
+        Pageable pageable = PageRequest.of(0, 5);
+        return spaceRepository.findTop5SpacesByRentalsAndReservations(pageable).stream()
+                .filter(row -> row != null && row.length == 3 && row[0] instanceof String && row[1] instanceof Long && row[2] instanceof Long)
+                .map(row -> new TopSpacesDto((String) row[0], (Long) row[1], (Long) row[2]))
+                .collect(Collectors.toList());
     }
 }

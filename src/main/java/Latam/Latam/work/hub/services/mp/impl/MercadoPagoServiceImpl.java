@@ -37,6 +37,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.chrono.ChronoLocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -160,89 +161,184 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
     @Transactional
     public String receiveNotification(String topic, String resource, Long invoiceId) throws MPException, MPApiException {
         try {
-            if (!"merchant_order".equalsIgnoreCase(topic) || resource == null) {
-                return "Notificación ignorada: tipo no soportado";
+            System.out.println("Recibida notificación MercadoPago - Topic: " + topic + ", Resource: " + resource + ", InvoiceId: " + invoiceId);
+            
+            // Si no hay topic o resource, ignoramos la notificación
+            if (topic == null || resource == null) {
+                System.out.println("Notificación ignorada: tipo no soportado o recurso nulo");
+                return "Notificación ignorada: datos incompletos";
             }
-
-            String[] resourceParts = resource.split("/");
-            if (resourceParts.length == 0) {
-                return "Recurso inválido";
-            }
-
-            Long merchantOrderId = Long.valueOf(resourceParts[resourceParts.length - 1]);
-            MerchantOrder merchantOrder = this.merchantOrderClient.get(merchantOrderId);
-
-            if (!"paid".equalsIgnoreCase(merchantOrder.getOrderStatus())) {
-                return "Orden no pagada";
-            }
-
-            if (merchantOrder.getPayments() == null || merchantOrder.getPayments().isEmpty()) {
-                throw new RuntimeException("No se encontraron pagos en la orden");
-            }
-
+            
             InvoiceEntity invoiceEntity = this.invoiceRepository.findById(invoiceId)
                     .orElseThrow(() -> new EntityNotFoundException("Factura no encontrada: " + invoiceId));
-
-            // Siempre procesamos la actualización de la factura y la reserva, incluso si ya fue procesada anteriormente
-            Long paymentId = merchantOrder.getPayments().get(0).getId();
-            invoiceEntity.setStatus(InvoiceStatus.PAID);
-            invoiceEntity.setPaymentId(paymentId);
-            this.invoiceRepository.save(invoiceEntity);
-
-            // Procesar según el tipo de factura
-            if (invoiceEntity.getBooking() != null) {
-                processBookingPayment(invoiceEntity);
-            } else if (invoiceEntity.getRentalContract() != null) {
-                processRentalContractPayment(invoiceEntity);
+            
+            // Procesar según el tipo de notificación
+            switch (topic.toLowerCase()) {
+                case "merchant_order":
+                    return processMerchantOrderNotification(resource, invoiceEntity);
+                case "payment":
+                    return processPaymentNotification(resource, invoiceEntity);
+                default:
+                    System.out.println("Tipo de notificación no soportada: " + topic);
+                    return "Tipo de notificación no soportada";
             }
-
-            return "Notificación procesada exitosamente";
-        } catch (Exception e) {            // Log del error
+        } catch (Exception e) {
+            // Log del error detallado
+            System.err.println("Error procesando notificación para factura " + invoiceId + ": " + e.getMessage());
+            e.printStackTrace();
             throw new RuntimeException("Error procesando notificación: " + e.getMessage(), e);
         }
+    }
+    
+    private String processMerchantOrderNotification(String resource, InvoiceEntity invoiceEntity) throws MPException, MPApiException {
+        try {
+            String[] resourceParts = resource.split("/");
+            if (resourceParts.length == 0) {
+                System.out.println("Recurso de merchant_order inválido: " + resource);
+                return "Recurso inválido";
+            }
+            
+            Long merchantOrderId = Long.valueOf(resourceParts[resourceParts.length - 1]);
+            System.out.println("Obteniendo merchant order: " + merchantOrderId);
+            MerchantOrder merchantOrder = this.merchantOrderClient.get(merchantOrderId);
+            
+            System.out.println("Estado de la orden merchant: " + merchantOrder.getOrderStatus());
+            
+            if (!"paid".equalsIgnoreCase(merchantOrder.getOrderStatus())) {
+                System.out.println("Orden no pagada. Estado actual: " + merchantOrder.getOrderStatus());
+                return "Orden no pagada";
+            }
+            
+            if (merchantOrder.getPayments() == null || merchantOrder.getPayments().isEmpty()) {
+                System.err.println("No se encontraron pagos en la orden: " + merchantOrderId);
+                throw new RuntimeException("No se encontraron pagos en la orden");
+            }
+            
+            // Procesamos el pago usando el paymentId del merchant_order
+            Long paymentId = merchantOrder.getPayments().get(0).getId();
+            return processPaymentSuccess(paymentId, invoiceEntity);
+        } catch (Exception e) {
+            System.err.println("Error procesando notificación merchant_order: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
+    }
+    
+    private String processPaymentNotification(String paymentId, InvoiceEntity invoiceEntity) throws MPException, MPApiException {
+        try {
+            System.out.println("Procesando notificación de pago: " + paymentId);
+            
+            // Obtener el estado del pago desde la API de MercadoPago
+            var payment = paymentClient.get(Long.valueOf(paymentId));
+            String status = payment.getStatus();
+            
+            System.out.println("Estado del pago " + paymentId + ": " + status);
+            
+            // Sólo procesar pagos aprobados
+            if ("approved".equalsIgnoreCase(status)) {
+                return processPaymentSuccess(Long.valueOf(paymentId), invoiceEntity);
+            } else {
+                System.out.println("Pago no aprobado. Estado actual: " + status);
+                return "Pago no aprobado";
+            }
+        } catch (Exception e) {
+            System.err.println("Error procesando notificación payment: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
+    }
+    
+    private String processPaymentSuccess(Long paymentId, InvoiceEntity invoiceEntity) {
+        // Actualizar estado de la factura
+        System.out.println("Actualizando factura " + invoiceEntity.getId() + " con paymentId: " + paymentId);
+        invoiceEntity.setStatus(InvoiceStatus.PAID);
+        invoiceEntity.setPaymentId(paymentId);
+        this.invoiceRepository.save(invoiceEntity);
+        
+        // Procesar según el tipo de factura
+        if (invoiceEntity.getBooking() != null) {
+            System.out.println("Procesando pago de reserva para factura: " + invoiceEntity.getId());
+            processBookingPayment(invoiceEntity);
+        } else if (invoiceEntity.getRentalContract() != null) {
+            System.out.println("Procesando pago de contrato para factura: " + invoiceEntity.getId());
+            processRentalContractPayment(invoiceEntity);
+        } else {
+            System.err.println("La factura " + invoiceEntity.getId() + " no tiene ni reserva ni contrato asociado");
+        }
+        
+        System.out.println("Pago procesado exitosamente para factura: " + invoiceEntity.getId());
+        return "Pago procesado exitosamente";
     }
 
     private void processBookingPayment(InvoiceEntity invoiceEntity) {
         BookingEntity booking = invoiceEntity.getBooking();
         
-        // Forzamos la actualización de la reserva independientemente de su estado actual
-        booking.setStatus(BookingStatus.CONFIRMED);
-        booking.setActive(true);
-        bookingRepository.save(booking);
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-        String formattedDate = invoiceEntity.getIssueDate().format(formatter);
-        SpaceEntity space = invoiceEntity.getBooking().getSpace();
-        space.setAvailable(false);
-        spaceRepository.save(space);
-        
-        // Informamos al servicio de reservas sobre el pago confirmado
         try {
-            bookingService.confirmBookingPayment(booking.getId());
+            System.out.println("Procesando pago para reserva ID: " + booking.getId());
+            
+            // Forzamos la actualización de la reserva independientemente de su estado actual
+            booking.setStatus(BookingStatus.CONFIRMED);
+            booking.setActive(true);
+            bookingRepository.save(booking);
+            System.out.println("Reserva actualizada a estado CONFIRMED");
+    
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+            String formattedDate = invoiceEntity.getIssueDate().format(formatter);
+            
+            // Obtener el espacio fresco de la base de datos
+            Long spaceId = booking.getSpace().getId();
+            SpaceEntity space = spaceRepository.findById(spaceId)
+                    .orElseThrow(() -> new RuntimeException("Espacio no encontrado ID: " + spaceId));
+                    
+            System.out.println("Estado actual del espacio ID " + space.getId() + ": available=" + space.getAvailable());
+            
+            // Marcar el espacio como no disponible
+            space.setAvailable(false);
+            spaceRepository.save(space);
+            
+            // Verificar que el espacio se haya actualizado correctamente
+            SpaceEntity verifiedSpace = spaceRepository.findById(space.getId()).orElse(null);
+            if (verifiedSpace != null) {
+                System.out.println("Estado del espacio después de actualizar: available=" + verifiedSpace.getAvailable());
+            }
+            
+            // Informamos al servicio de reservas sobre el pago confirmado
+            try {
+                System.out.println("Notificando al servicio de reservas sobre el pago confirmado");
+                bookingService.confirmBookingPayment(booking.getId());
+            } catch (Exception e) {
+                // Loguear el error para diagnóstico
+                System.err.println("Error al confirmar el pago de la reserva a través del servicio: " + e.getMessage());
+                e.printStackTrace();
+                // La actualización directa de la entidad ya se realizó, así que podemos continuar
+            }
+            
+            this.mailService.sendPaymentConfirmationEmail(
+                    booking.getUser().getEmail(),
+                    booking.getUser().getName(),
+                    booking.getSpace().getName(),
+                    formattedDate,
+                    invoiceEntity.getTotalAmount());
         } catch (Exception e) {
-            // Si falla el servicio de reservas, al menos ya actualizamos la entidad directamente
+            // Capturar cualquier error inesperado, loguearlo y lanzarlo nuevamente para que la transacción se revierta si es necesario
+            System.err.println("Error crítico al procesar el pago de la reserva: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Error al procesar el pago: " + e.getMessage(), e);
         }
-        
-        this.mailService.sendPaymentConfirmationEmail(
-                booking.getUser().getEmail(),
-                booking.getUser().getName(),
-                booking.getSpace().getName(),
-                formattedDate,
-                invoiceEntity.getTotalAmount());
     }
 
     private void processRentalContractPayment(InvoiceEntity invoiceEntity) {
         RentalContractEntity contract = invoiceEntity.getRentalContract();
 
         if (contract.getContractStatus() == ContractStatus.PENDING) {
-            contract.setContractStatus(ContractStatus.ACTIVE);
+            if (!contract.getStartDate().atStartOfDay().isBefore(LocalDateTime.now().toLocalDate().atStartOfDay())) {
+                contract.setContractStatus(ContractStatus.CONFIRMED);
+            }
+            if (contract.getStartDate().atStartOfDay().isEqual(LocalDateTime.now().toLocalDate().atStartOfDay())) {
+                contract.setContractStatus(ContractStatus.ACTIVE);
+            }
             rentalContractRepository.save(contract);
-
-            SpaceEntity space = contract.getSpace();
-            space.setAvailable(false);
-            spaceRepository.save(space);
         }
-
         UserEntity tenant = contract.getTenant();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 

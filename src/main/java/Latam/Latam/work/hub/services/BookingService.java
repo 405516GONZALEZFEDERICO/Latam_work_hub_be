@@ -7,6 +7,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+
 
 @Service
 public interface BookingService {
@@ -14,7 +16,8 @@ public interface BookingService {
     void confirmBookingPayment(Long bookingId);
     void cancelAndRefoundPayment(Long bookingId);
     void updateBookingsStatus();
-
+    void validateContractAndBookingOverlap(Long spaceId, LocalDate startDate, LocalDate endDate);
     String generateBookingPaymentLink(Long bookingId);
    Page<BookingResponseDto> getUserBookings(String uid, BookingStatus status, Pageable pageable);
+
 }

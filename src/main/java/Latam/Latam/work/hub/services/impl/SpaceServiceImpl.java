@@ -10,6 +10,7 @@ import Latam.Latam.work.hub.entities.AddressEntity;
 import Latam.Latam.work.hub.entities.AmenityEntity;
 import Latam.Latam.work.hub.entities.ImageEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
+import Latam.Latam.work.hub.entities.SpaceTypeEntity;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.repositories.AddressRepository;
 import Latam.Latam.work.hub.repositories.AmenityRepository;
@@ -60,8 +61,8 @@ public class SpaceServiceImpl implements SpaceService {
             spaceEntity.setActive(true);
             spaceEntity.setAvailable(true);
             spaceEntity.setCreatedDateTime(LocalDateTime.now());
-
-            spaceEntity.setType(spaceTypeRepository.findByName(spaceDto.getType().getName()));
+            SpaceTypeEntity spaceTypeEntity=this.spaceTypeRepository.findById(spaceDto.getType().getId()).orElse(null);
+            spaceEntity.setType(spaceTypeEntity);
             if (spaceEntity.getType() == null) {
                 throw new Exception("Tipo de espacio no encontrado");
             }

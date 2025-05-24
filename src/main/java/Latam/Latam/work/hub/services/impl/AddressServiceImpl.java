@@ -1,10 +1,15 @@
 package Latam.Latam.work.hub.services.impl;
 
+import Latam.Latam.work.hub.dtos.common.CityAndCountryDto;
 import Latam.Latam.work.hub.entities.AddressEntity;
 import Latam.Latam.work.hub.entities.CityEntity;
+import Latam.Latam.work.hub.entities.CountryEntity;
+import Latam.Latam.work.hub.entities.SpaceEntity;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.repositories.AddressRepository;
 import Latam.Latam.work.hub.repositories.CityRepository;
+import Latam.Latam.work.hub.repositories.CountryRepository;
+import Latam.Latam.work.hub.repositories.SpaceRepository;
 import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.services.AddressService;
 import jakarta.persistence.EntityNotFoundException;
@@ -18,6 +23,8 @@ public class AddressServiceImpl implements AddressService {
     private final AddressRepository addressRepository;
     private final UserRepository userRepository;
     private final CityRepository cityRepository;
+    private  final SpaceRepository spaceRepository;
+    private final CountryRepository countryRepository;
 
     @Override
     public AddressEntity updateAddress(Long id, AddressEntity addressDetails) {
@@ -68,4 +75,23 @@ public class AddressServiceImpl implements AddressService {
 
         return address;
     }
+
+    @Override
+    public CityAndCountryDto getCityAndCountry(String cityName, String countryName) {
+        CityEntity city = cityRepository.findByName(cityName);
+        CityAndCountryDto cityAndCountry = new CityAndCountryDto();
+        cityAndCountry.setCityId(city.getId());
+        cityAndCountry.setCityName(cityName);
+        CountryEntity countryEntity=countryRepository.findByName(countryName);
+        if (countryEntity != null) {
+            cityAndCountry.setCountryId(countryEntity.getId());
+            cityAndCountry.setCountryName(countryName);
+            return cityAndCountry;
+        }
+        return null;
+    }
+
+
+
+
 }

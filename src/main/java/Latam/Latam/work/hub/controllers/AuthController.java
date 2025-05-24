@@ -1,6 +1,7 @@
 package Latam.Latam.work.hub.controllers;
 
 import Latam.Latam.work.hub.dtos.common.RoleAssignmentRequestDto;
+import Latam.Latam.work.hub.dtos.common.RoleChangeDto;
 import Latam.Latam.work.hub.exceptions.AuthException;
 import Latam.Latam.work.hub.security.dtos.AuthResponseDto;
 import Latam.Latam.work.hub.security.dtos.AuthResponseGoogleDto;
@@ -83,9 +84,14 @@ public class AuthController {
     @PostMapping("/roles/assign")
     @PreAuthorize("hasRole('DEFAULT')")
     public ResponseEntity<?> assignRoleToUser(@RequestBody RoleAssignmentRequestDto request ) {
-        if (claveAdmin.equals(request.getAdminKey())){
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            System.out.println("Authorities: " + auth.getAuthorities());
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        System.out.println("Authorities: " + auth.getAuthorities());
+        
+        // Allow DEFAULT, CLIENTE or PROVEEDOR roles to assign roles without admin key
+        boolean isAuthorizedUser = auth.getAuthorities().stream()
+            .anyMatch(a -> a.getAuthority().equals("ROLE_DEFAULT") );
+        
+        if (isAuthorizedUser || claveAdmin.equals(request.getAdminKey())) {
             try {
                 firebaseRoleService.assignRolFirebaseUser(request.getUid(), request.getRoleName());
                 return ResponseEntity.ok().body(
@@ -111,7 +117,7 @@ public class AuthController {
                         )
                 );
             }
-        }else {
+        } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(
                     Map.of(
                             "success", false,
@@ -119,7 +125,6 @@ public class AuthController {
                     )
             );
         }
-
     }
     @GetMapping("/recuperar-contrasenia")
     public ResponseEntity<String> recuperarContrasenia(@RequestParam String email) {
@@ -134,6 +139,22 @@ public class AuthController {
         } catch (FirebaseAuthException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(null);
+        }
+    }
+    @PostMapping("/change-rol")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?>changeRol(@RequestBody RoleChangeDto roleChangeDto) {
+        try {
+            String result = authService.changeRol(roleChangeDto);
+            return ResponseEntity.ok(result);
+        } catch (AuthException e) {
+            log.error("Error en cambio de rol: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(e.getMessage());
+        } catch (Exception e) {
+            log.error("Error en cambio de rol: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(e.getMessage());
         }
     }
 

@@ -23,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/reports-admin")
@@ -32,10 +33,20 @@ public class ReportAdminController {
     private final ReportAdminService reportAdminService;
 
     @GetMapping("/spaces")
-    public ResponseEntity<Page<SpaceReportRowDto>> getSpacesReport(SpaceReportFiltersDto filters, Pageable pageable) {
-        logger.info("Solicitud para informe de espacios con filtros: {} y paginación: {}", filters, pageable);
+    public ResponseEntity<Page<SpaceReportRowDto>> getSpacesReport(
+            @RequestParam(required = false) String status,
+            Pageable pageable
+    ) {
+
+        SpaceReportFiltersDto filters = new SpaceReportFiltersDto();
+        filters.setStatus(status);
+
+        logger.info("Solicitud para informe de espacios con estado: '{}' y paginación: {}", status, pageable);
+
         try {
             Page<SpaceReportRowDto> reportPage = reportAdminService.getSpacesReport(filters, pageable);
+            logger.info("Informe generado exitosamente. Total elementos: {}, página: {}",
+                    reportPage.getTotalElements(), reportPage.getNumber());
             return ResponseEntity.ok(reportPage);
         } catch (Exception e) {
             logger.error("Error al generar informe de espacios: {}", e.getMessage(), e);

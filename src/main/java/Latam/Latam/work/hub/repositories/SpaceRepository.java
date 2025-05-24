@@ -84,32 +84,27 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
             Pageable pageable
     );
 
-//    @Query("SELECT COUNT(s) FROM SpaceEntity s WHERE s.active = true AND s.available = true AND s.deleted = false")
-//    long countByActiveTrueAndAvailableTrueAndDeletedFalse();
 
-    @Query(value = "SELECT s " +
-            "FROM SpaceEntity s JOIN FETCH s.owner ow " +
-            "WHERE s.deleted = false " +
-            "AND (:providerId IS NULL OR ow.id = :providerId) " +
-            "AND (:spaceStatusParam IS NULL " +
+
+    // QUERY CORREGIDA - Maneja correctamente cuando spaceStatusParam es NULL o vacío
+    @Query(value = "SELECT s FROM SpaceEntity s JOIN FETCH s.owner ow " +
+            "WHERE ((:spaceStatusParam IS NULL OR :spaceStatusParam = '') " +
             "   OR (:spaceStatusParam = 'Disponible' AND s.active = true AND s.available = true AND s.deleted = false) " +
             "   OR (:spaceStatusParam = 'Ocupado' AND s.active = true AND s.available = false AND s.deleted = false) " +
-            "   OR (:spaceStatusParam = 'Inactivo' AND s.active = false)" +
+            "   OR (:spaceStatusParam = 'Activo' AND s.active = true AND s.deleted = false) " +
+            "   OR (:spaceStatusParam = 'Inactivo' AND s.active = false AND s.deleted = false)" +
             ")",
             countQuery = "SELECT COUNT(s) FROM SpaceEntity s JOIN s.owner ow " +
-                    "WHERE s.deleted = false " +
-                    "AND (:providerId IS NULL OR ow.id = :providerId) " +
-                    "AND (:spaceStatusParam IS NULL " +
+                    "WHERE ((:spaceStatusParam IS NULL OR :spaceStatusParam = '') " +
                     "   OR (:spaceStatusParam = 'Disponible' AND s.active = true AND s.available = true AND s.deleted = false) " +
                     "   OR (:spaceStatusParam = 'Ocupado' AND s.active = true AND s.available = false AND s.deleted = false) " +
-                    "   OR (:spaceStatusParam = 'Inactivo' AND s.active = false)" +
+                    "   OR (:spaceStatusParam = 'Activo' AND s.active = true AND s.deleted = false) " +
+                    "   OR (:spaceStatusParam = 'Inactivo' AND s.active = false AND s.deleted = false)" +
                     ")")
     Page<SpaceEntity> findSpacesForReportPage(
-            @Param("providerId") Long providerId,
             @Param("spaceStatusParam") String spaceStatusParam,
             Pageable pageable
     );
-
 
     @Query("SELECT COUNT(s) FROM SpaceEntity s WHERE s.owner.id = :ownerId AND s.deleted = false")
     Long countByOwnerId(@Param("ownerId") Long ownerId);
@@ -119,4 +114,13 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
 
     @Query("SELECT s FROM SpaceEntity s WHERE s.active = true or s.active = false ")
     List<SpaceEntity> findAllActiveSpaces();
+
+    @Query("SELECT s.name, COUNT(DISTINCT rc.id) AS rentalCount, COUNT(DISTINCT b.id) AS reservationCount " +
+            "FROM SpaceEntity s " +
+            "LEFT JOIN s.rentalContracts rc " + // Asegúrate de que este es el nombre de la relación
+            "LEFT JOIN s.bookings b " +         // Asegúrate de que este es el nombre de la relación
+            "WHERE s.deleted = false " +
+            "GROUP BY s.id, s.name " +
+            "ORDER BY rentalCount DESC, reservationCount DESC")
+    List<Object[]> findTop5SpacesByRentalsAndReservations(Pageable pageable);
 }

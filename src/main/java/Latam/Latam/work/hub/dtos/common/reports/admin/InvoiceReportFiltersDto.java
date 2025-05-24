@@ -11,6 +11,5 @@ import java.time.LocalDateTime;
 public class InvoiceReportFiltersDto {
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime startDate; // For issue date range
-    private Long clientId;
     private String status; // InvoiceStatus as String
 }

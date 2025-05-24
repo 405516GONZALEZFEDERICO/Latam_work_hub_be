@@ -13,7 +13,5 @@ public class ContractReportFiltersDto {
     private LocalDate contractStartDate;
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate contractEndDate;
-    private Long tenantId; // (clientId)
-    private Long ownerId;  // (providerId)
     private String status; // ContractStatus as String
 }

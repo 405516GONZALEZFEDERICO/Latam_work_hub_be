@@ -1,10 +1,21 @@
 package Latam.Latam.work.hub.configs.schedulers;
 
+import Latam.Latam.work.hub.entities.RentalContractEntity;
+import Latam.Latam.work.hub.entities.SpaceEntity;
+import Latam.Latam.work.hub.enums.ContractStatus;
+import Latam.Latam.work.hub.repositories.RentalContractRepository;
+import Latam.Latam.work.hub.repositories.SpaceRepository;
 import Latam.Latam.work.hub.services.RentalContractService;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Programador de tareas relacionadas con contratos de alquiler
@@ -13,6 +24,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @Slf4j
 public class ContractScheduler {
+    private final SpaceRepository spaceRepository;
+
+    private  final RentalContractRepository rentalContractRepository;
 
     private final RentalContractService rentalContractService;
 
@@ -124,5 +138,38 @@ public class ContractScheduler {
             log.error("Error al ejecutar renovaciones automáticas: {}", e.getMessage(), e);
         }
     }
+
+    @Scheduled(fixedRate = 1000)
+    public void updateConfirmedToActiveContracts() {
+        try {
+            rentalContractService.updateConfirmedToActiveContracts();
+        } catch (Exception e) {
+            log.error("Error al actualizar contratos CONFIRMADOS a ACTIVOS: {}", e.getMessage(), e);
+        }
+    }
+
+    @Scheduled(fixedRate = 1000)
+    @Transactional
+    public void updateSpacesAvailability() {
+
+        List<SpaceEntity> spaces = spaceRepository.findAll();
+        LocalDate today = LocalDate.now();
+
+        for (SpaceEntity space : spaces) {
+            Optional<RentalContractEntity> activeContract = rentalContractRepository.findBySpaceIdAndContractStatusAndEndDateGreaterThanEqual(
+                    space.getId(),
+                    ContractStatus.ACTIVE,
+                    today
+            );
+
+            // Actualizar disponibilidad
+            boolean shouldBeAvailable = !activeContract.isPresent();
+            if (space.getAvailable() != shouldBeAvailable) {
+                space.setAvailable(shouldBeAvailable);
+                spaceRepository.save(space);
+            }
+        }
+    }
+
 
 }

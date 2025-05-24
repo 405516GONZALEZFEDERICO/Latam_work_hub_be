@@ -4,12 +4,15 @@ import Latam.Latam.work.hub.dtos.common.BookingDto;
 import Latam.Latam.work.hub.dtos.common.BookingResponseDto;
 import Latam.Latam.work.hub.entities.BookingEntity;
 import Latam.Latam.work.hub.entities.InvoiceEntity;
+import Latam.Latam.work.hub.entities.RentalContractEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
 import Latam.Latam.work.hub.enums.BookingStatus;
 import Latam.Latam.work.hub.enums.BookingType;
+import Latam.Latam.work.hub.enums.ContractStatus;
 import Latam.Latam.work.hub.enums.InvoiceStatus;
 import Latam.Latam.work.hub.repositories.BookingRepository;
 import Latam.Latam.work.hub.repositories.InvoiceRepository;
+import Latam.Latam.work.hub.repositories.RentalContractRepository;
 import Latam.Latam.work.hub.repositories.SpaceRepository;
 import Latam.Latam.work.hub.repositories.UserRepository;
 import Latam.Latam.work.hub.services.BookingService;
@@ -21,11 +24,13 @@ import com.mercadopago.exceptions.MPException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -35,6 +40,7 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
@@ -44,7 +50,7 @@ public class BookingServiceImpl implements BookingService {
     private final MailService mailService;
     private final MercadoPagoService mercadoPagoService;
     private final InvoiceRepository invoiceRepository;
-
+    private final RentalContractRepository rentalContractRepository;
     @Override
     @Transactional
     public String createBooking(BookingDto bookingDto) {
@@ -126,8 +132,11 @@ public class BookingServiceImpl implements BookingService {
         BookingEntity booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Reserva no encontrada"));
 
+        System.out.println("Confirmando pago de la reserva ID: " + bookingId);
+        
         // Verificar si la reserva ya está confirmada
         if (booking.getStatus() == BookingStatus.CONFIRMED) {
+            System.out.println("Reserva ya confirmada, no se procesa nuevamente");
             return; // No procesar nuevamente
         }
 
@@ -135,18 +144,29 @@ public class BookingServiceImpl implements BookingService {
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setActive(true);
         bookingRepository.save(booking);
-        Optional<SpaceEntity> space= this.spaceRepository.findById(booking.getSpace().getId());
-        if (space.isEmpty()){
-            throw new RuntimeException("Espacio no encontrado");
+        System.out.println("Reserva actualizada a estado CONFIRMED");
+        
+        // Obtener y actualizar el espacio
+        SpaceEntity space = spaceRepository.findById(booking.getSpace().getId())
+                .orElseThrow(() -> new RuntimeException("Espacio no encontrado"));
+        
+        System.out.println("Estado actual del espacio ID " + space.getId() + ": available=" + space.getAvailable());
+        
+        // Marcar el espacio como no disponible
+        space.setAvailable(false);
+        spaceRepository.save(space);
+        
+        // Verificar que el espacio se haya actualizado correctamente
+        SpaceEntity verifiedSpace = spaceRepository.findById(space.getId()).orElse(null);
+        if (verifiedSpace != null) {
+            System.out.println("Estado del espacio después de actualizar: available=" + verifiedSpace.getAvailable());
         }
-        space.get().setAvailable(false);
-        this.spaceRepository.save(space.get());
+        
         // Enviar email al dueño del espacio para notificarle de la reserva
-        SpaceEntity spaced = booking.getSpace();
         mailService.sendBookingNotificationToOwner(
-                spaced.getOwner().getEmail(),
-                spaced.getOwner().getName(),
-                spaced.getName(),
+                space.getOwner().getEmail(),
+                space.getOwner().getName(),
+                space.getName(),
                 booking.getUser().getName(),
                 booking.getStartDate().toString(),
                 booking.getEndDate() != null ? booking.getEndDate().toString() : "",
@@ -161,13 +181,16 @@ public class BookingServiceImpl implements BookingService {
         BookingEntity booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Reserva no encontrada"));
 
-        // Validar que la cancelación sea con al menos 7 días de anticipación
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime startDate = booking.getStartDate();
-        long daysUntilBooking = ChronoUnit.DAYS.between(now, startDate);
+        // Permitir cancelaciones sin restricción de días para reservas pendientes de pago
+        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+            // Validar que la cancelación sea con al menos 7 días de anticipación solo para reservas ya confirmadas
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime startDate = booking.getStartDate();
+            long daysUntilBooking = ChronoUnit.DAYS.between(now, startDate);
 
-        if (daysUntilBooking < 7) {
-            throw new RuntimeException("Solo se permiten cancelaciones con al menos 7 días de anticipación");
+            if (daysUntilBooking < 7) {
+                throw new RuntimeException("Solo se permiten cancelaciones con al menos 7 días de anticipación para reservas confirmadas");
+            }
         }
 
         // Buscar la factura asociada a la reserva
@@ -221,11 +244,26 @@ public class BookingServiceImpl implements BookingService {
         List<BookingEntity> upcomingBookings = bookingRepository.findUpcomingBookings(now);
         for (BookingEntity booking : upcomingBookings) {
             if (booking.getStatus() == BookingStatus.CONFIRMED) {
+                System.out.println("Activando reserva ID: " + booking.getId());
+                
+                // Actualizar reserva a estado activo
                 booking.setStatus(BookingStatus.ACTIVE);
                 booking.setActive(true);
+                bookingRepository.save(booking); // Guardar cada reserva inmediatamente
+                
+                // Asegurar que el espacio no esté disponible
                 SpaceEntity space = booking.getSpace();
-                space.setAvailable(false);
-                spaceRepository.save(space);
+                if (space != null) {
+                    System.out.println("Marcando espacio ID: " + space.getId() + " como no disponible");
+                    space.setAvailable(false);
+                    spaceRepository.save(space); // Guardar cada espacio inmediatamente
+                    
+                    // Verificar el estado para asegurar que se guardó correctamente
+                    SpaceEntity verifiedSpace = spaceRepository.findById(space.getId()).orElse(null);
+                    if (verifiedSpace != null) {
+                        System.out.println("Estado del espacio después de actualizar: available=" + verifiedSpace.getAvailable());
+                    }
+                }
             }
         }
 
@@ -260,12 +298,18 @@ public class BookingServiceImpl implements BookingService {
             }
 
             if (shouldComplete) {
+                System.out.println("Completando reserva ID: " + booking.getId());
+                
                 booking.setStatus(BookingStatus.COMPLETED);
                 booking.setActive(false);
+                bookingRepository.save(booking); // Guardar cada reserva inmediatamente
 
                 SpaceEntity space = booking.getSpace();
-                space.setAvailable(true);
-                spaceRepository.save(space);
+                if (space != null) {
+                    System.out.println("Marcando espacio ID: " + space.getId() + " como disponible al completar la reserva");
+                    space.setAvailable(true);
+                    spaceRepository.save(space); // Guardar cada espacio inmediatamente
+                }
 
                 mailService.sendBookingCompletedEmail(
                         booking.getUser().getEmail(),
@@ -274,9 +318,15 @@ public class BookingServiceImpl implements BookingService {
                 );
             }
         }
+        
+        // Ya no es necesario guardar en lote, ya que guardamos cada entidad inmediatamente después de modificarla
+        // bookingRepository.saveAll(upcomingBookings);
+        // bookingRepository.saveAll(activeBookings);
+    }
 
-        bookingRepository.saveAll(upcomingBookings);
-        bookingRepository.saveAll(activeBookings);
+    @Override
+    public void validateContractAndBookingOverlap(Long spaceId, LocalDate startDate, LocalDate endDate) {
+
     }
 
     @Override

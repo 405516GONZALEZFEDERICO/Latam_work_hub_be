@@ -13,8 +13,5 @@ public class BookingReportFiltersDto {
     private LocalDate startDate;
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDate endDate;
-    private Long clientId;
-    private Long providerId;
-    private Long spaceId;
     private String status; // BookingStatus as String
 }

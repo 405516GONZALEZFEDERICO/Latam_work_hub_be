@@ -35,7 +35,7 @@ public interface UserRepository extends JpaRepository<UserEntity, Long> {
             Pageable pageable
     );
     @Query("SELECT u FROM UserEntity u LEFT JOIN u.role r WHERE " +
-            "(:roleName IS NULL OR r.name = :roleName) and u.enabled = true or u.enabled = false")
+            "(:roleName IS NULL OR r.name = :roleName) and u.enabled = true or u.enabled    = false")
     List<UserEntity> findUsersEnabledByRole(
             @Param("roleName") String roleName
     );

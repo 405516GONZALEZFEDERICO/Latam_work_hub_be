@@ -4,6 +4,7 @@ import Latam.Latam.work.hub.dtos.common.FiltersSpaceDto;
 import Latam.Latam.work.hub.dtos.common.SpaceDto;
 
 import Latam.Latam.work.hub.dtos.common.SpaceResponseDto;
+import Latam.Latam.work.hub.entities.AddressEntity;
 import Latam.Latam.work.hub.services.SpaceService;
 import lombok.RequiredArgsConstructor;
 
@@ -146,4 +147,5 @@ public class SpaceControlller {
     public ResponseEntity<List<SpaceResponseDto>> getAllActiveSpaces() {
         return ResponseEntity.ok(spaceService.getAllActiveSpaces());
     }
+
 }
