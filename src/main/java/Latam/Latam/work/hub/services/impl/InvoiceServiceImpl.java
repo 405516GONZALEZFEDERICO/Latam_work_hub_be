@@ -71,8 +71,8 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     public InvoiceEntity findByBookingId(Long bookingId) {
-        Optional<InvoiceEntity> invoice = Optional.ofNullable(invoiceRepository.findByBookingId(bookingId).orElseThrow(() -> new EntityNotFoundException("Factura no encontrada")));
-        return invoice.orElseThrow(() -> new EntityNotFoundException("Factura no encontrada"));
+        return invoiceRepository.findByBookingId(bookingId)
+                .orElseThrow(() -> new EntityNotFoundException("Factura no encontrada para la reserva ID: " + bookingId));
     }
 
     private String generateInvoiceNumber() {

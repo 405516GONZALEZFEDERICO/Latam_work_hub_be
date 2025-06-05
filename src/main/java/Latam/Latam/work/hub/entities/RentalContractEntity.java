@@ -101,7 +101,9 @@ public class RentalContractEntity implements Billable {
 
     @Override
     public Double getAmount() {
-        return monthlyAmount;
+        // Si se ha configurado un monto específico (ej: depósito + primer mes), usarlo
+        // De lo contrario, usar el monto mensual por defecto
+        return amount != null ? amount : monthlyAmount;
     }
 
     public void setAmount(Double amount) {

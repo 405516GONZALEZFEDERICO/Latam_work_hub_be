@@ -273,4 +273,211 @@ Double sumRevenueByProviderId(
            "GROUP BY FUNCTION('YEAR', inv.issueDate), FUNCTION('MONTH', inv.issueDate) " +
            "ORDER BY year ASC, month ASC")
     List<Object[]> findMonthlyRevenue(@Param("startDate") LocalDateTime startDate);
+
+    // ===== MÉTODOS PARA DASHBOARD PROVEEDOR =====
+    
+    /**
+     * Obtiene ingresos mensuales de un proveedor específico
+     */
+    @Query("SELECT FUNCTION('YEAR', inv.issueDate) as year, FUNCTION('MONTH', inv.issueDate) as month, " +
+           "SUM(CASE WHEN inv.status = 'CANCELLED' THEN -1 * COALESCE(inv.refundAmount, 0) " +
+           "     ELSE (inv.totalAmount - COALESCE(inv.refundAmount, 0)) END) as revenue " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.space.owner.id = :providerId " +
+           "AND (inv.status = 'PAID' OR inv.status = 'CANCELLED') " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL " +
+           "AND inv.issueDate >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', inv.issueDate), FUNCTION('MONTH', inv.issueDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlyRevenueByProvider(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    // ===== MÉTODOS PARA DASHBOARD CLIENTE =====
+    
+    /**
+     * Obtiene gastos mensuales de un cliente específico
+     */
+    @Query("SELECT FUNCTION('YEAR', inv.issueDate) as year, FUNCTION('MONTH', inv.issueDate) as month, " +
+           "SUM(inv.totalAmount) as spending " +
+           "FROM InvoiceEntity inv " +
+           "WHERE (inv.rentalContract.tenant.id = :clientId OR inv.booking.user.id = :clientId) " +
+           "AND inv.status = 'PAID' " +
+           "AND inv.issueDate >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', inv.issueDate), FUNCTION('MONTH', inv.issueDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlySpendingByClient(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    // ===== NUEVOS MÉTODOS PARA DISTINGUIR INGRESOS BRUTOS VS NETOS =====
+    
+    /**
+     * Ingresos BRUTOS totales de CONTRATOS únicamente (sin descontar reembolsos) - ADMIN
+     * Solo facturas pagadas de contratos de alquiler, NO de reservas
+     */
+    @Query("SELECT COALESCE(SUM(inv.totalAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.status = 'PAID' " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL")
+    Double sumGrossRevenueByDateRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de REEMBOLSOS en facturas de CONTRATOS únicamente - ADMIN  
+     * Solo reembolsos en facturas de contratos, NO de reservas
+     */
+    @Query("SELECT COALESCE(SUM(inv.refundAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.refundAmount IS NOT NULL " +
+           "AND inv.refundAmount > 0 " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL")
+    Double sumTotalRefundsByDateRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Ingresos BRUTOS por proveedor de CONTRATOS (sin descontar reembolsos) - PROVEEDOR
+     */
+    @Query("SELECT COALESCE(SUM(inv.totalAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.space.owner.id = :providerId " +
+           "AND inv.status = 'PAID' " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract IS NOT NULL")
+    Double sumGrossRevenueFromContractsByProviderId(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**  
+     * Ingresos BRUTOS por proveedor de RESERVAS (sin descontar reembolsos) - PROVEEDOR
+     */
+    @Query("SELECT COALESCE(SUM(inv.totalAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.booking.space.owner.id = :providerId " +
+           "AND inv.status = 'PAID' " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.booking IS NOT NULL")
+    Double sumGrossRevenueFromBookingsByProviderId(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de REEMBOLSOS en facturas de CONTRATOS por proveedor - PROVEEDOR
+     */
+    @Query("SELECT COALESCE(SUM(inv.refundAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.refundAmount IS NOT NULL " +
+           "AND inv.refundAmount > 0 " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract.space.owner.id = :providerId " +
+           "AND inv.rentalContract IS NOT NULL")
+    Double sumInvoiceRefundsFromContractsByProviderId(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de REEMBOLSOS en facturas de RESERVAS por proveedor - PROVEEDOR
+     */
+    @Query("SELECT COALESCE(SUM(inv.refundAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.refundAmount IS NOT NULL " +
+           "AND inv.refundAmount > 0 " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.booking.space.owner.id = :providerId " +
+           "AND inv.booking IS NOT NULL")
+    Double sumInvoiceRefundsFromBookingsByProviderId(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Gastos BRUTOS por cliente de CONTRATOS (sin descontar reembolsos) - CLIENTE
+     */
+    @Query("SELECT COALESCE(SUM(inv.totalAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.tenant.id = :clientId " +
+           "AND inv.status = 'PAID' " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract IS NOT NULL")
+    Double sumGrossSpendingFromContractsByClientId(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Gastos BRUTOS por cliente de RESERVAS (sin descontar reembolsos) - CLIENTE
+     */
+    @Query("SELECT COALESCE(SUM(inv.totalAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.booking.user.id = :clientId " +
+           "AND inv.status = 'PAID' " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.booking IS NOT NULL")
+    Double sumGrossSpendingFromBookingsByClientId(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de REEMBOLSOS en facturas de CONTRATOS recibidos por cliente - CLIENTE
+     */
+    @Query("SELECT COALESCE(SUM(inv.refundAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.refundAmount IS NOT NULL " +
+           "AND inv.refundAmount > 0 " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract.tenant.id = :clientId " +
+           "AND inv.rentalContract IS NOT NULL")
+    Double sumInvoiceRefundsFromContractsByClientId(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de REEMBOLSOS en facturas de RESERVAS recibidos por cliente - CLIENTE
+     */
+    @Query("SELECT COALESCE(SUM(inv.refundAmount), 0.0) " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.refundAmount IS NOT NULL " +
+           "AND inv.refundAmount > 0 " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.booking.user.id = :clientId " +
+           "AND inv.booking IS NOT NULL")
+    Double sumInvoiceRefundsFromBookingsByClientId(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
 }

@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -16,4 +17,6 @@ public class RentalContractDto {
     private Integer durationMonths;
     private Double monthlyAmount;
     private Double depositAmount;
+    private Double amenitiesPrice;
+    private List<String> selectedAmenities;
 }

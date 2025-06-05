@@ -6,6 +6,7 @@ import Latam.Latam.work.hub.dtos.common.RentalContractResponseDto;
 import Latam.Latam.work.hub.dtos.common.InvoiceHistoryDto;
 import Latam.Latam.work.hub.dtos.common.AutoRenewalDto;
 import Latam.Latam.work.hub.dtos.common.isAutoRenewalDto;
+import Latam.Latam.work.hub.dtos.common.PaymentRequestDto;
 import Latam.Latam.work.hub.enums.ContractStatus;
 import Latam.Latam.work.hub.services.RentalContractService;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +56,7 @@ public class RentalContractController {
     public ResponseEntity<Page<RentalContractResponseDto>> getUserContracts(
             @PathVariable String uid,
             @RequestParam(required = false) ContractStatus status,
-            @PageableDefault(size = 10, sort = "id", direction = Sort.Direction.ASC) Pageable pageable) {
+            @PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
 
         Page<RentalContractResponseDto> contracts = rentalContractService.getUserContracts(uid, status, pageable);
         return ResponseEntity.ok(contracts);
@@ -74,14 +75,17 @@ public class RentalContractController {
     }
 
     /**
-     * Obtiene la última factura de un contrato y genera el link de pago
+     * Obtiene la última factura de un contrato y genera el link de pago con monto personalizado
      * @param contractId ID del contrato
+     * @param paymentRequest Datos del pago incluyendo el monto total calculado por el frontend
      * @return URL para realizar el pago
      */
-    @GetMapping("/{contractId}/current-invoice/payment")
+    @PostMapping("/{contractId}/current-invoice/payment")
     @PreAuthorize("hasRole('CLIENTE')")
-    public ResponseEntity<String> getCurrentInvoicePaymentLink(@PathVariable Long contractId) {
-        String paymentUrl = rentalContractService.generateCurrentInvoicePaymentLink(contractId);
+    public ResponseEntity<String> getCurrentInvoicePaymentLink(
+            @PathVariable Long contractId, 
+            @RequestBody PaymentRequestDto paymentRequest) {
+        String paymentUrl = rentalContractService.generateCurrentInvoicePaymentLink(contractId, paymentRequest);
         return ResponseEntity.ok(paymentUrl);
     }
 

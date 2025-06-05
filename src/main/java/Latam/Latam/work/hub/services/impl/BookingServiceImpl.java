@@ -61,6 +61,7 @@ public class BookingServiceImpl implements BookingService {
             var user = userRepository.findByFirebaseUid(bookingDto.getUid())
                     .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
 
+            // Validar disponibilidad básica del espacio para reservas
             boolean isAvailableForPeriod = isSpaceAvailableForPeriod(
                     space.getId(),
                     bookingDto.getStartDate(),
@@ -72,8 +73,21 @@ public class BookingServiceImpl implements BookingService {
                 throw new RuntimeException("El espacio no está disponible para el período solicitado");
             }
 
-            var bookingEntity = new BookingEntity();
-            bookingEntity.setActive(true);
+            // Validar que no haya contratos activos o confirmados que se solapen
+            LocalDate startDate = bookingDto.getStartDate().toLocalDate();
+            LocalDate endDate = bookingDto.getEndDate() != null ? 
+                bookingDto.getEndDate().toLocalDate() : 
+                bookingDto.getStartDate().toLocalDate();
+            
+            try {
+                validateContractAndBookingOverlap(space.getId(), startDate, endDate);
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException(e.getMessage());
+            }
+
+            BookingEntity bookingEntity = new BookingEntity();
+            // La reserva se crea como INACTIVE y solo se activa cuando llegue su fecha de inicio
+            bookingEntity.setActive(false);
             bookingEntity.setSpace(space);
             bookingEntity.setUser(user);
             bookingEntity.setInitHour(bookingDto.getInitHour());
@@ -93,7 +107,7 @@ public class BookingServiceImpl implements BookingService {
               }
             bookingEntity.setBookingType(determineBookingType(bookingDto));
 
-            var savedBooking = bookingRepository.saveAndFlush(bookingEntity);
+            BookingEntity savedBooking = bookingRepository.saveAndFlush(bookingEntity);
             return invoiceService.createInvoice(savedBooking);
 
         } catch (Exception e) {
@@ -140,38 +154,28 @@ public class BookingServiceImpl implements BookingService {
             return; // No procesar nuevamente
         }
 
-        // Actualizar estado de la reserva
+        // Actualizar estado de la reserva a CONFIRMED (pero NO active)
         booking.setStatus(BookingStatus.CONFIRMED);
-        booking.setActive(true);
+        // NO marcar como active = true hasta que llegue la fecha de inicio
         bookingRepository.save(booking);
         System.out.println("Reserva actualizada a estado CONFIRMED");
         
-        // Obtener y actualizar el espacio
-        SpaceEntity space = spaceRepository.findById(booking.getSpace().getId())
-                .orElseThrow(() -> new RuntimeException("Espacio no encontrado"));
-        
-        System.out.println("Estado actual del espacio ID " + space.getId() + ": available=" + space.getAvailable());
-        
-        // Marcar el espacio como no disponible
-        space.setAvailable(false);
-        spaceRepository.save(space);
-        
-        // Verificar que el espacio se haya actualizado correctamente
-        SpaceEntity verifiedSpace = spaceRepository.findById(space.getId()).orElse(null);
-        if (verifiedSpace != null) {
-            System.out.println("Estado del espacio después de actualizar: available=" + verifiedSpace.getAvailable());
-        }
+        // El espacio se marcará como no disponible cuando la reserva se active por el scheduler
         
         // Enviar email al dueño del espacio para notificarle de la reserva
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+        DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+        
+        SpaceEntity space = booking.getSpace();
         mailService.sendBookingNotificationToOwner(
                 space.getOwner().getEmail(),
                 space.getOwner().getName(),
                 space.getName(),
                 booking.getUser().getName(),
-                booking.getStartDate().toString(),
-                booking.getEndDate() != null ? booking.getEndDate().toString() : "",
-                booking.getInitHour() != null ? booking.getInitHour().toString() : "",
-                booking.getEndHour() != null ? booking.getEndHour().toString() : ""
+                booking.getStartDate().format(dateFormatter),
+                booking.getEndDate() != null ? booking.getEndDate().format(dateFormatter) : "",
+                booking.getInitHour() != null ? booking.getInitHour().format(timeFormatter) : "",
+                booking.getEndHour() != null ? booking.getEndHour().format(timeFormatter) : ""
         );
     }
 
@@ -202,12 +206,25 @@ public class BookingServiceImpl implements BookingService {
         space.setAvailable(true);
         spaceRepository.save(space);
 
+        // Guardar el status original antes de cambiar a CANCELED
+        BookingStatus originalStatus = booking.getStatus();
+        
         // Actualizar la entidad de reserva
         booking.setStatus(BookingStatus.CANCELED);
         booking.setActive(false);
-        if (invoice != null && invoice.getStatus() == InvoiceStatus.PAID) {
-            booking.setRefundAmount(booking.getTotalAmount()); // Guardamos el reembolso en la reserva
+        
+        // Setear refund amount si la reserva fue pagada (independientemente del estado de la factura)
+        // Esto incluye reservas CONFIRMED, ACTIVE, COMPLETED que se cancelan con reembolso
+        if (originalStatus == BookingStatus.CONFIRMED || 
+            originalStatus == BookingStatus.ACTIVE || 
+            originalStatus == BookingStatus.COMPLETED) {
+            booking.setRefundAmount(booking.getTotalAmount()); // Guardamos el reembolso completo
+            System.out.println("Seteando refund amount: " + booking.getTotalAmount() + " para reserva " + booking.getId());
+        } else {
+            booking.setRefundAmount(0.0); // No hay reembolso si no se había pagado (PENDING_PAYMENT)
+            System.out.println("No hay reembolso para reserva " + booking.getId() + " - no estaba pagada (status original: " + originalStatus + ")");
         }
+        
         bookingRepository.save(booking);
         
         // Procesar la factura si existe
@@ -239,34 +256,27 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public void updateBookingsStatus() {
         LocalDateTime now = LocalDateTime.now();
+        log.info("Actualizando estado de reservas a las {}", now);
 
         // Activar reservas cuya fecha de inicio ha llegado
         List<BookingEntity> upcomingBookings = bookingRepository.findUpcomingBookings(now);
+        log.info("Se encontraron {} reservas próximas a activar", upcomingBookings.size());
         for (BookingEntity booking : upcomingBookings) {
-            if (booking.getStatus() == BookingStatus.CONFIRMED) {
-                System.out.println("Activando reserva ID: " + booking.getId());
-                
-                // Actualizar reserva a estado activo
+            try {
+                SpaceEntity space = booking.getSpace();
                 booking.setStatus(BookingStatus.ACTIVE);
                 booking.setActive(true);
-                bookingRepository.save(booking); // Guardar cada reserva inmediatamente
-                
-                // Asegurar que el espacio no esté disponible
-                SpaceEntity space = booking.getSpace();
+                bookingRepository.saveAndFlush(booking); // Forzar flush
+
                 if (space != null) {
-                    System.out.println("Marcando espacio ID: " + space.getId() + " como no disponible");
                     space.setAvailable(false);
-                    spaceRepository.save(space); // Guardar cada espacio inmediatamente
-                    
-                    // Verificar el estado para asegurar que se guardó correctamente
-                    SpaceEntity verifiedSpace = spaceRepository.findById(space.getId()).orElse(null);
-                    if (verifiedSpace != null) {
-                        System.out.println("Estado del espacio después de actualizar: available=" + verifiedSpace.getAvailable());
-                    }
+                    spaceRepository.saveAndFlush(space); // Forzar flush
+                    log.info("Espacio {} actualizado: available={}", space.getId(), space.getAvailable());
                 }
+            } catch (Exception e) {
+                log.error("Error actualizando reserva {}: {}", booking.getId(), e.getMessage());
             }
         }
-
         // Completar reservas según su tipo
         List<BookingEntity> activeBookings = bookingRepository.findByStatus(BookingStatus.ACTIVE);
         for (BookingEntity booking : activeBookings) {
@@ -308,7 +318,7 @@ public class BookingServiceImpl implements BookingService {
                 if (space != null) {
                     System.out.println("Marcando espacio ID: " + space.getId() + " como disponible al completar la reserva");
                     space.setAvailable(true);
-                    spaceRepository.save(space); // Guardar cada espacio inmediatamente
+                    spaceRepository.saveAndFlush(space); // Guardar cada espacio inmediatamente
                 }
 
                 mailService.sendBookingCompletedEmail(
@@ -326,7 +336,29 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     public void validateContractAndBookingOverlap(Long spaceId, LocalDate startDate, LocalDate endDate) {
+        // Verificar contratos activos Y confirmados
+        List<RentalContractEntity> activeContracts = rentalContractRepository
+                .findBySpaceIdAndDateRange(spaceId, startDate, endDate, ContractStatus.ACTIVE);
+        
+        List<RentalContractEntity> confirmedContracts = rentalContractRepository
+                .findBySpaceIdAndDateRange(spaceId, startDate, endDate, ContractStatus.CONFIRMED);
 
+        if (!activeContracts.isEmpty() || !confirmedContracts.isEmpty()) {
+            throw new IllegalArgumentException("El espacio tiene un contrato activo o confirmado durante el período seleccionado");
+        }
+
+        // Verificar reservas confirmadas o activas
+        List<BookingEntity> overlappingBookings = bookingRepository
+                .findBySpaceIdAndDateRangeAndStatuses(
+                        spaceId,
+                        startDate.atStartOfDay(),
+                        endDate.atTime(23, 59, 59),
+                        List.of(BookingStatus.CONFIRMED, BookingStatus.ACTIVE)
+                );
+
+        if (!overlappingBookings.isEmpty()) {
+            throw new IllegalArgumentException("El espacio tiene reservas durante el período seleccionado");
+        }
     }
 
     @Override
@@ -375,14 +407,19 @@ public class BookingServiceImpl implements BookingService {
             throw new RuntimeException("La reserva no está pendiente de pago");
         }
 
+        // Buscar la factura asociada a la reserva
+        InvoiceEntity invoice = invoiceRepository.findByBookingId(bookingId)
+                .orElseThrow(() -> new RuntimeException("Factura no encontrada para la reserva"));
+
         try {
             String buyerEmail = booking.getUser().getEmail();
             String sellerEmail = booking.getSpace().getOwner().getEmail();
             String description = "Reserva de " + booking.getSpace().getName() + " - " +
                     booking.getStartDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 
+            // Usar el invoiceId en lugar del bookingId
             return mercadoPagoService.createInvoicePaymentPreference(
-                    booking.getId(),
+                    invoice.getId(),  // Cambio aquí: usar invoice.getId() en lugar de booking.getId()
                     description,
                     BigDecimal.valueOf(booking.getTotalAmount()),
                     buyerEmail,

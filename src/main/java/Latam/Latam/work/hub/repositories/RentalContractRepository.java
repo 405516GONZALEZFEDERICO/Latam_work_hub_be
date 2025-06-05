@@ -1,6 +1,8 @@
 package Latam.Latam.work.hub.repositories;
+import Latam.Latam.work.hub.entities.BookingEntity;
 import Latam.Latam.work.hub.entities.RentalContractEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
+import Latam.Latam.work.hub.enums.BookingStatus;
 import Latam.Latam.work.hub.enums.ContractStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -9,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +30,27 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
             "AND rc.endDate >= :currentDate")
     List<RentalContractEntity> findActiveContractsForBilling(LocalDate currentDate);
 
+
+
+    @Query("""
+        SELECT rc FROM RentalContractEntity rc
+        WHERE rc.space.id = :spaceId
+        AND rc.contractStatus = :status
+        AND ((rc.startDate BETWEEN :startDate AND :endDate)
+        OR (rc.endDate BETWEEN :startDate AND :endDate)
+        OR (:startDate BETWEEN rc.startDate AND rc.endDate))
+    """)
+    List<RentalContractEntity> findBySpaceIdAndDateRange(
+            Long spaceId,
+            LocalDate startDate,
+            LocalDate endDate,
+            ContractStatus status
+    );
+
+
+
+
+
     /**
      * Encuentra contratos por espacio
      */
@@ -38,6 +62,11 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
     @Query("SELECT rc FROM RentalContractEntity rc WHERE rc.contractStatus = :status AND rc.startDate = :startDate")
     List<RentalContractEntity> findByContractStatusAndStartDate(@Param("status") ContractStatus status, @Param("startDate") LocalDate startDate);
 
+    /**
+     * Encuentra contratos por estado que ya debían haber empezado (para capturar contratos atrasados)
+     */
+    @Query("SELECT rc FROM RentalContractEntity rc WHERE rc.contractStatus = :status AND rc.startDate <= :startDate")
+    List<RentalContractEntity> findByContractStatusAndStartDateLessThanEqual(@Param("status") ContractStatus status, @Param("startDate") LocalDate startDate);
 
     /**
      * Encuentra contratos por usuario (Firebase UID)
@@ -179,19 +208,66 @@ public interface RentalContractRepository extends JpaRepository<RentalContractEn
             "GROUP BY r.space.id")
     List<Object[]> countActiveRentalContractForSpaces(@Param("spaceIds") List<Long> spaceIds);
 
-
     @Query("""
-    SELECT s.type.name as spaceType, COUNT(rc.id) as contractCount
-    FROM RentalContractEntity rc
-    JOIN rc.space s
-    WHERE rc.contractStatus = 'ACTIVE'
-    GROUP BY s.type.name
-""")
+        SELECT s.type.name as spaceType, COUNT(rc.id) as contractCount
+        FROM RentalContractEntity rc
+        JOIN rc.space s
+        WHERE rc.contractStatus = 'ACTIVE' OR rc.contractStatus = 'CONFIRMED'
+        GROUP BY s.type.name
+    """)
     List<Object[]> findContractsCountBySpaceType();
 
     Optional<RentalContractEntity> findBySpaceIdAndContractStatusAndEndDateGreaterThanEqual(
             Long spaceId,
             ContractStatus status,
             LocalDate date
+    );
+
+    // ===== MÉTODOS PARA CALCULAR REEMBOLSOS DE DEPÓSITOS =====
+    
+    /**
+     * Total de reembolsos de depósitos - ADMIN
+     */
+    @Query("SELECT COALESCE(SUM(rc.depositRefundedAmount), 0.0) " +
+           "FROM RentalContractEntity rc " +
+           "WHERE rc.depositRefundedAmount IS NOT NULL " +
+           "AND rc.depositRefundedAmount > 0 " +
+           "AND rc.depositRefoundDate >= :startDate " +
+           "AND rc.depositRefoundDate <= :endDate")
+    Double sumDepositRefundsByDateRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de reembolsos de depósitos por proveedor - PROVEEDOR
+     */
+    @Query("SELECT COALESCE(SUM(rc.depositRefundedAmount), 0.0) " +
+           "FROM RentalContractEntity rc " +
+           "WHERE rc.space.owner.id = :providerId " +
+           "AND rc.depositRefundedAmount IS NOT NULL " +
+           "AND rc.depositRefundedAmount > 0 " +
+           "AND rc.depositRefoundDate >= :startDate " +
+           "AND rc.depositRefoundDate <= :endDate")
+    Double sumDepositRefundsByProviderId(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de reembolsos de depósitos recibidos por cliente - CLIENTE
+     */
+    @Query("SELECT COALESCE(SUM(rc.depositRefundedAmount), 0.0) " +
+           "FROM RentalContractEntity rc " +
+           "WHERE rc.tenant.id = :clientId " +
+           "AND rc.depositRefundedAmount IS NOT NULL " +
+           "AND rc.depositRefundedAmount > 0 " +
+           "AND rc.depositRefoundDate >= :startDate " +
+           "AND rc.depositRefoundDate <= :endDate")
+    Double sumDepositRefundsByClientId(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
     );
 }

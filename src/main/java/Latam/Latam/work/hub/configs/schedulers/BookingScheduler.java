@@ -21,7 +21,7 @@ public class BookingScheduler {
   * La disponibilidad de los espacios se actualiza automáticamente cuando
   * una reserva comienza o termina.
   */
- @Scheduled(fixedRate = 1000) // 1 segundo en milisegundos
+ @Scheduled(fixedRate = 5000) // Cambiado a 5 segundos
  public void updateBookingsStatus() {
      try {
          bookingService.updateBookingsStatus();

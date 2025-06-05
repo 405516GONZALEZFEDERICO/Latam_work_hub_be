@@ -79,18 +79,47 @@ public class DashboardAdminServiceImpl implements DashboardAdminService {
                 thirtyDaysAgo.format(DateTimeFormatter.ISO_DATE_TIME), 
                 now.format(DateTimeFormatter.ISO_DATE_TIME));
         
-        // Ingresos de reservas (ya resta reembolsos y procesa canceladas)
+        // === INGRESOS BRUTOS ===
+        // Ingresos brutos de reservas (sin descontar reembolsos)
+        Double bookingGrossRevenue = bookingRepository.sumGrossRevenueByDateRange(thirtyDaysAgo, now);
+        log.info("Ingresos BRUTOS de reservas (últimos 30 días): {}", bookingGrossRevenue);
+        
+        // Ingresos brutos de contratos (sin descontar reembolsos)
+        Double invoiceGrossRevenue = invoiceRepository.sumGrossRevenueByDateRange(thirtyDaysAgo, now);
+        log.info("Ingresos BRUTOS de contratos (últimos 30 días): {}", invoiceGrossRevenue);
+        
+        Double totalGrossRevenue = (bookingGrossRevenue != null ? bookingGrossRevenue : 0.0) + 
+                                  (invoiceGrossRevenue != null ? invoiceGrossRevenue : 0.0);
+        log.info("Ingresos BRUTOS TOTALES (últimos 30 días): {}", totalGrossRevenue);
+        
+        // === REEMBOLSOS TOTALES ===
+        // Solo contar reembolsos reales procesados
+        Double contractDepositRefunds = rentalContractRepository.sumDepositRefundsByDateRange(thirtyDaysAgo, now);
+        log.info("Reembolsos de depósitos (últimos 30 días): {}", contractDepositRefunds);
+        
+        Double bookingRefunds = bookingRepository.sumTotalRefundsByDateRange(thirtyDaysAgo, now);
+        log.info("Reembolsos de reservas (últimos 30 días): {}", bookingRefunds);
+        
+        // Las facturas normalmente no tienen reembolsos directos, son los depósitos los que se reembolsan
+        
+        Double totalRefunds = (contractDepositRefunds != null ? contractDepositRefunds : 0.0) + 
+                             (bookingRefunds != null ? bookingRefunds : 0.0);
+        log.info("Total reembolsos REALES (últimos 30 días): {}", totalRefunds);
+        
+        // === INGRESOS NETOS ===
+        Double totalNetRevenue = totalGrossRevenue - totalRefunds;
+        log.info("Ingresos NETOS TOTALES (últimos 30 días): {}", totalNetRevenue);
+        
+        // Ingresos de reservas (ya resta reembolsos y procesa canceladas) - PARA COMPATIBILIDAD
         Double bookingRevenue = bookingRepository.sumTotalRevenueByDateRange(thirtyDaysAgo, now);
-        log.info("Ingresos de reservas (últimos 30 días): {} (null significa que no hay datos)", bookingRevenue);
         
-        // Ingresos de contratos (ya resta reembolsos y procesa canceladas)
+        // Ingresos de contratos (ya resta reembolsos y procesa canceladas) - PARA COMPATIBILIDAD
         Double invoiceRevenue = invoiceRepository.sumTotalAmountByDateRange(thirtyDaysAgo, now);
-        log.info("Ingresos de contratos (últimos 30 días): {} (null significa que no hay datos)", invoiceRevenue);
         
-        // Sumar ambos ingresos (o usar 0.0 si alguno es null)
+        // Sumar ambos ingresos (o usar 0.0 si alguno es null) - PARA COMPATIBILIDAD
         Double totalRevenue = (bookingRevenue != null ? bookingRevenue : 0.0) + 
                              (invoiceRevenue != null ? invoiceRevenue : 0.0);
-        log.info("Ingresos TOTALES (últimos 30 días): {}", totalRevenue);
+        log.info("Ingresos TOTALES (método anterior - compatibilidad): {}", totalRevenue);
         
         // KPIs de Contratos
         long activeContracts = rentalContractRepository.countByContractStatus(ContractStatus.ACTIVE);
@@ -109,7 +138,12 @@ public class DashboardAdminServiceImpl implements DashboardAdminService {
                 .activeProviders(activeProviders)
                 .publishedSpaces(publishedSpaces)
                 .reservationsThisMonth(reservationsThisMonth)
-                .totalRevenueLast30Days(totalRevenue)
+                // Nuevos campos diferenciados
+                .totalGrossRevenueLast30Days(totalGrossRevenue)
+                .totalNetRevenueLast30Days(totalNetRevenue)
+                .totalRefundsLast30Days(totalRefunds)
+                // Campo deprecated para compatibilidad
+                .totalRevenueLast30Days(totalNetRevenue) // Usamos neto para mantener consistencia
                 .activeContracts(activeContracts)
                 .contractsExpiringSoon(contractsExpiringSoon)
                 .build();

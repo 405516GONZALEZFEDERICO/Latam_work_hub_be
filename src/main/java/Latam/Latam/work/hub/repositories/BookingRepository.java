@@ -16,13 +16,29 @@ import java.util.List;
 
 @Repository
 public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
+    @Query("""
+        SELECT b FROM BookingEntity b
+        WHERE b.space.id = :spaceId
+        AND b.status IN :statuses
+        AND ((b.startDate BETWEEN :startDate AND :endDate)
+        OR (b.endDate BETWEEN :startDate AND :endDate)
+        OR (:startDate BETWEEN b.startDate AND b.endDate))
+    """)
+    List<BookingEntity> findBySpaceIdAndDateRangeAndStatuses(
+            Long spaceId,
+            LocalDateTime startDate,
+            LocalDateTime endDate,
+            List<BookingStatus> statuses
+    );
+
     /**
      * Busca reservas que se solapan con el período especificado para un espacio
+     * Solo considera reservas ACTIVE o reservas CONFIRMED cuyo período de inicio ya llegó
      */
     @Query("SELECT b FROM BookingEntity b " +
             "WHERE b.space.id = :spaceId " +
-            "AND b.active = true " +
-            "AND b.status != 'CANCELED' " +
+            "AND ((b.status = 'ACTIVE') OR " +
+            "     (b.status = 'CONFIRMED' AND b.startDate <= CURRENT_TIMESTAMP)) " +
             "AND (" +
             "  (b.bookingType = 'PER_HOUR' AND " +
             "   b.startDate = :startDate AND " +
@@ -45,14 +61,14 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
 
     List<BookingEntity> findByStatus(BookingStatus status);
     /**
-     * Busca reservas confirmadas cuya fecha de inicio ha llegado o está cerca
+     * Busca reservas confirmadas cuya fecha de inicio ha llegado para activarlas
      */
-    @Query("SELECT b FROM BookingEntity b " +
-            "WHERE b.status = 'CONFIRMED' " +
-            "AND b.startDate <= :now " +
-            "AND (b.endDate IS NULL OR b.endDate > :now)")
-    List<BookingEntity> findUpcomingBookings(@Param("now") LocalDateTime now);
-
+   @Query("""
+       SELECT b FROM BookingEntity b
+       WHERE b.status = 'CONFIRMED'
+       AND b.startDate <= :now
+   """)
+   List<BookingEntity> findUpcomingBookings(@Param("now") LocalDateTime now);
 
 
     @Query("SELECT b FROM BookingEntity b WHERE b.user.firebaseUid = :uid " +
@@ -193,5 +209,227 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
     long countConflictingBookings(@Param("spaceId") Long spaceId,
                                   @Param("startDate") LocalDate startDate,
                                   @Param("endDate") LocalDate endDate);
+
+    /**
+     * Verifica si existe al menos una reserva activa o confirmada para un espacio específico
+     */
+    @Query("SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END FROM BookingEntity b " +
+           "WHERE b.space.id = :spaceId " +
+           "AND b.status IN :statuses " +
+           "AND b.active = true")
+    boolean existsBySpaceIdAndStatusIn(@Param("spaceId") Long spaceId, 
+                                       @Param("statuses") List<BookingStatus> statuses);
+
+    // ===== MÉTODOS PARA DASHBOARD PROVEEDOR =====
+    
+    /**
+     * Cuenta reservas de un proveedor en un rango de fechas
+     */
+    @Query("SELECT COUNT(b) FROM BookingEntity b " +
+           "WHERE b.space.owner.id = :providerId " +
+           "AND b.startDate >= :startDate " +
+           "AND b.startDate <= :endDate " +
+           "AND b.status IN :statuses")
+    long countReservationsByProviderInDateRange(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("statuses") List<BookingStatus> statuses
+    );
+
+    /**
+     * Suma ingresos de un proveedor en un rango de fechas
+     */
+    @Query("SELECT SUM(CASE WHEN b.status = 'CANCELED' THEN -1 * COALESCE(b.refundAmount, 0) " +
+           "            ELSE (b.totalAmount - COALESCE(b.refundAmount, 0)) END) " +
+           "FROM BookingEntity b " +
+           "WHERE b.space.owner.id = :providerId " +
+           "AND (b.status != 'PENDING_PAYMENT' AND b.status != 'DRAFT') " +
+           "AND b.startDate >= :startDate " +
+           "AND b.startDate <= :endDate")
+    Double sumRevenueByProviderInDateRange(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    /**
+     * Obtiene ingresos mensuales de un proveedor
+     */
+    @Query("SELECT FUNCTION('YEAR', b.startDate) as year, FUNCTION('MONTH', b.startDate) as month, " +
+           "SUM(CASE WHEN b.status = 'CANCELED' THEN -1 * COALESCE(b.refundAmount, 0) " +
+           "     ELSE (b.totalAmount - COALESCE(b.refundAmount, 0)) END) as revenue " +
+           "FROM BookingEntity b " +
+           "WHERE b.space.owner.id = :providerId " +
+           "AND (b.status != 'PENDING_PAYMENT' AND b.status != 'DRAFT') " +
+           "AND b.startDate >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', b.startDate), FUNCTION('MONTH', b.startDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlyRevenueByProvider(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    // ===== MÉTODOS PARA DASHBOARD CLIENTE =====
+    
+    /**
+     * Cuenta reservas de un cliente por estados
+     */
+    @Query("SELECT COUNT(b) FROM BookingEntity b " +
+           "WHERE b.user.id = :clientId " +
+           "AND b.status IN :statuses")
+    long countByUserIdAndStatuses(
+            @Param("clientId") Long clientId,
+            @Param("statuses") List<BookingStatus> statuses
+    );
+
+    /**
+     * Suma gastos de un cliente en un rango de fechas
+     * Usa updatedAt cuando está disponible, incluye todas las reservas como fallback
+     */
+    @Query("SELECT SUM(b.totalAmount) " +
+           "FROM BookingEntity b " +
+           "WHERE b.user.id = :clientId " +
+           "AND b.status IN ('CONFIRMED', 'COMPLETED', 'ACTIVE') " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt >= :startDate) " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt <= :endDate)")
+    Double sumSpendingByClientInDateRange(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    /**
+     * Obtiene gastos mensuales de un cliente
+     */
+    @Query("SELECT FUNCTION('YEAR', b.startDate) as year, FUNCTION('MONTH', b.startDate) as month, " +
+           "SUM(b.totalAmount) as spending " +
+           "FROM BookingEntity b " +
+           "WHERE b.user.id = :clientId " +
+           "AND b.status IN ('CONFIRMED', 'COMPLETED', 'ACTIVE') " +
+           "AND b.startDate >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', b.startDate), FUNCTION('MONTH', b.startDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlySpendingByClient(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    /**
+     * Obtiene conteo de reservas por tipo de espacio para un cliente
+     */
+    @Query("SELECT b.space.type.name, COUNT(b.id) " +
+           "FROM BookingEntity b " +
+           "WHERE b.user.id = :clientId " +
+           "AND b.space.type.name IS NOT NULL " +
+           "GROUP BY b.space.type.name " +
+           "ORDER BY COUNT(b.id) DESC")
+    List<Object[]> findBookingCountBySpaceTypeForClient(@Param("clientId") Long clientId);
+
+    // ===== NUEVOS MÉTODOS PARA DISTINGUIR INGRESOS BRUTOS VS NETOS EN RESERVAS =====
+    
+    /**
+     * Ingresos BRUTOS totales de reservas - INCLUYE CANCELADAS porque representan dinero generado
+     * Usa updatedAt cuando está disponible, startDate como fallback
+     */
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0.0) " +
+           "FROM BookingEntity b " +
+           "WHERE b.status IN ('CONFIRMED', 'COMPLETED', 'ACTIVE', 'CANCELED') " +
+           "AND b.status != 'PENDING_PAYMENT' " +
+           "AND b.status != 'DRAFT' " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt >= :startDate) " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt <= :endDate)")
+    Double sumGrossRevenueByDateRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de REEMBOLSOS en reservas canceladas - ADMIN
+     * Usa updatedAt cuando está disponible, incluye todos como fallback
+     */
+    @Query("SELECT COALESCE(SUM(b.refundAmount), 0.0) " +
+           "FROM BookingEntity b " +
+           "WHERE b.status = 'CANCELED' " +
+           "AND b.refundAmount IS NOT NULL " +
+           "AND b.refundAmount > 0 " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt >= :startDate) " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt <= :endDate)")
+    Double sumTotalRefundsByDateRange(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Ingresos BRUTOS de reservas por proveedor - INCLUYE CANCELADAS porque representan dinero generado
+     * Usa updatedAt cuando está disponible, startDate como fallback
+     */
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0.0) " +
+           "FROM BookingEntity b " +
+           "WHERE b.space.owner.id = :providerId " +
+           "AND b.status IN ('CONFIRMED', 'COMPLETED', 'ACTIVE', 'CANCELED') " +
+           "AND b.status != 'PENDING_PAYMENT' " +
+           "AND b.status != 'DRAFT' " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt >= :startDate) " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt <= :endDate)")
+    Double sumGrossRevenueByProviderInDateRange(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de REEMBOLSOS en reservas canceladas por proveedor - PROVEEDOR
+     * Usa updatedAt cuando está disponible, incluye todos como fallback
+     */
+    @Query("SELECT COALESCE(SUM(b.refundAmount), 0.0) " +
+           "FROM BookingEntity b " +
+           "WHERE b.space.owner.id = :providerId " +
+           "AND b.status = 'CANCELED' " +
+           "AND b.refundAmount IS NOT NULL " +
+           "AND b.refundAmount > 0 " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt >= :startDate) " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt <= :endDate)")
+    Double sumTotalRefundsByProviderInDateRange(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Gastos BRUTOS de reservas por cliente - INCLUYE CANCELADAS porque representan dinero gastado
+     * Los reembolsos se descuentan por separado en otra consulta
+     */
+    @Query("SELECT COALESCE(SUM(b.totalAmount), 0.0) " +
+           "FROM BookingEntity b " +
+           "WHERE b.user.id = :clientId " +
+           "AND b.status IN ('CONFIRMED', 'COMPLETED', 'ACTIVE', 'CANCELED') " +
+           "AND b.status != 'PENDING_PAYMENT' " +
+           "AND b.status != 'DRAFT' " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt >= :startDate) " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt <= :endDate)")
+    Double sumGrossSpendingByClientInDateRange(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+    
+    /**
+     * Total de REEMBOLSOS recibidos por cliente en reservas canceladas - CLIENTE
+     * Usa updatedAt cuando está disponible, incluye todos los reembolsos como fallback
+     */
+    @Query("SELECT COALESCE(SUM(b.refundAmount), 0.0) " +
+           "FROM BookingEntity b " +
+           "WHERE b.user.id = :clientId " +
+           "AND b.status = 'CANCELED' " +
+           "AND b.refundAmount IS NOT NULL " +
+           "AND b.refundAmount > 0 " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt >= :startDate) " +
+           "AND (b.updatedAt IS NULL OR b.updatedAt <= :endDate)")
+    Double sumTotalRefundsByClientInDateRange(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
 
 }

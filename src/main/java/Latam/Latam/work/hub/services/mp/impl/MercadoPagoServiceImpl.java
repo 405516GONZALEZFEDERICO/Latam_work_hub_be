@@ -42,14 +42,19 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 public class MercadoPagoServiceImpl implements MercadoPagoService {
 
     private static final String CURRENCY = "ARS";
+    
+    // Cache para evitar procesamiento duplicado simultáneo
+    private final Set<String> processingPayments = new HashSet<>();
 
     @Value("${front.url}")
     private String WEB_URL;
@@ -249,25 +254,59 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
     }
     
     private String processPaymentSuccess(Long paymentId, InvoiceEntity invoiceEntity) {
-        // Actualizar estado de la factura
-        System.out.println("Actualizando factura " + invoiceEntity.getId() + " con paymentId: " + paymentId);
-        invoiceEntity.setStatus(InvoiceStatus.PAID);
-        invoiceEntity.setPaymentId(paymentId);
-        this.invoiceRepository.save(invoiceEntity);
+        String cacheKey = "payment_" + paymentId + "_invoice_" + invoiceEntity.getId();
         
-        // Procesar según el tipo de factura
-        if (invoiceEntity.getBooking() != null) {
-            System.out.println("Procesando pago de reserva para factura: " + invoiceEntity.getId());
-            processBookingPayment(invoiceEntity);
-        } else if (invoiceEntity.getRentalContract() != null) {
-            System.out.println("Procesando pago de contrato para factura: " + invoiceEntity.getId());
-            processRentalContractPayment(invoiceEntity);
-        } else {
-            System.err.println("La factura " + invoiceEntity.getId() + " no tiene ni reserva ni contrato asociado");
+        // VERIFICACIÓN DE CACHE: Evitar procesamiento simultáneo del mismo pago
+        synchronized (processingPayments) {
+            if (processingPayments.contains(cacheKey)) {
+                System.out.println("Pago " + paymentId + " para factura " + invoiceEntity.getId() + " ya se está procesando");
+                return "Pago ya en procesamiento";
+            }
+            processingPayments.add(cacheKey);
         }
         
-        System.out.println("Pago procesado exitosamente para factura: " + invoiceEntity.getId());
-        return "Pago procesado exitosamente";
+        try {
+            // VERIFICACIÓN ATÓMICA: Recargar la factura desde la BD para evitar race conditions
+            InvoiceEntity freshInvoice = invoiceRepository.findById(invoiceEntity.getId())
+                    .orElseThrow(() -> new RuntimeException("Factura no encontrada: " + invoiceEntity.getId()));
+            
+            // Verificar si la factura ya está pagada para evitar procesamiento duplicado
+            if (freshInvoice.getStatus() == InvoiceStatus.PAID) {
+                System.out.println("Factura " + freshInvoice.getId() + " ya está pagada, no se procesa nuevamente");
+                return "Factura ya procesada";
+            }
+            
+            // Verificar si ya tiene el mismo paymentId para evitar duplicados
+            if (freshInvoice.getPaymentId() != null && freshInvoice.getPaymentId().equals(paymentId)) {
+                System.out.println("Factura " + freshInvoice.getId() + " ya tiene este paymentId: " + paymentId);
+                return "Pago ya procesado";
+            }
+        
+        // Actualizar estado de la factura
+        System.out.println("Actualizando factura " + freshInvoice.getId() + " con paymentId: " + paymentId);
+        freshInvoice.setStatus(InvoiceStatus.PAID);
+        freshInvoice.setPaymentId(paymentId);
+        this.invoiceRepository.save(freshInvoice);
+        
+        // Procesar según el tipo de factura
+        if (freshInvoice.getBooking() != null) {
+            System.out.println("Procesando pago de reserva para factura: " + freshInvoice.getId());
+            processBookingPayment(freshInvoice);
+        } else if (freshInvoice.getRentalContract() != null) {
+            System.out.println("Procesando pago de contrato para factura: " + freshInvoice.getId());
+            processRentalContractPayment(freshInvoice);
+        } else {
+            System.err.println("La factura " + freshInvoice.getId() + " no tiene ni reserva ni contrato asociado");
+        }
+        
+            System.out.println("Pago procesado exitosamente para factura: " + freshInvoice.getId());
+            return "Pago procesado exitosamente";
+        } finally {
+            // Limpiar cache al finalizar (exitoso o con error)
+            synchronized (processingPayments) {
+                processingPayments.remove(cacheKey);
+            }
+        }
     }
 
     private void processBookingPayment(InvoiceEntity invoiceEntity) {
@@ -276,47 +315,38 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
         try {
             System.out.println("Procesando pago para reserva ID: " + booking.getId());
             
-            // Forzamos la actualización de la reserva independientemente de su estado actual
-            booking.setStatus(BookingStatus.CONFIRMED);
-            booking.setActive(true);
-            bookingRepository.save(booking);
-            System.out.println("Reserva actualizada a estado CONFIRMED");
-    
+            // VERIFICACIÓN ATÓMICA: Recargar la reserva desde la BD para evitar race conditions
+            BookingEntity freshBooking = bookingRepository.findById(booking.getId())
+                    .orElseThrow(() -> new RuntimeException("Reserva no encontrada: " + booking.getId()));
+            
+            // Verificar si la reserva ya está confirmada para evitar procesamiento duplicado
+            if (freshBooking.getStatus() == BookingStatus.CONFIRMED || 
+                freshBooking.getStatus() == BookingStatus.ACTIVE ||
+                freshBooking.getStatus() == BookingStatus.COMPLETED) {
+                System.out.println("Reserva " + freshBooking.getId() + " ya está en estado: " + freshBooking.getStatus() + ", no se procesa nuevamente el pago");
+                return; // No procesar nuevamente
+            }
+            
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
             String formattedDate = invoiceEntity.getIssueDate().format(formatter);
             
-            // Obtener el espacio fresco de la base de datos
-            Long spaceId = booking.getSpace().getId();
-            SpaceEntity space = spaceRepository.findById(spaceId)
-                    .orElseThrow(() -> new RuntimeException("Espacio no encontrado ID: " + spaceId));
-                    
-            System.out.println("Estado actual del espacio ID " + space.getId() + ": available=" + space.getAvailable());
-            
-            // Marcar el espacio como no disponible
-            space.setAvailable(false);
-            spaceRepository.save(space);
-            
-            // Verificar que el espacio se haya actualizado correctamente
-            SpaceEntity verifiedSpace = spaceRepository.findById(space.getId()).orElse(null);
-            if (verifiedSpace != null) {
-                System.out.println("Estado del espacio después de actualizar: available=" + verifiedSpace.getAvailable());
-            }
-            
             // Informamos al servicio de reservas sobre el pago confirmado
+            // Este método ya maneja todo: status CONFIRMED, NO active hasta la fecha correcta
             try {
                 System.out.println("Notificando al servicio de reservas sobre el pago confirmado");
-                bookingService.confirmBookingPayment(booking.getId());
+                bookingService.confirmBookingPayment(freshBooking.getId());
             } catch (Exception e) {
                 // Loguear el error para diagnóstico
                 System.err.println("Error al confirmar el pago de la reserva a través del servicio: " + e.getMessage());
                 e.printStackTrace();
-                // La actualización directa de la entidad ya se realizó, así que podemos continuar
+                throw e; // Re-lanzar para que la transacción se revierta
             }
             
+            // Solo enviar email si la reserva fue procesada exitosamente
             this.mailService.sendPaymentConfirmationEmail(
-                    booking.getUser().getEmail(),
-                    booking.getUser().getName(),
-                    booking.getSpace().getName(),
+                    freshBooking.getUser().getEmail(),
+                    freshBooking.getUser().getName(),
+                    freshBooking.getSpace().getName(),
                     formattedDate,
                     invoiceEntity.getTotalAmount());
         } catch (Exception e) {

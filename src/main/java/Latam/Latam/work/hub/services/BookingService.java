@@ -1,7 +1,6 @@
 package Latam.Latam.work.hub.services;
 import Latam.Latam.work.hub.dtos.common.BookingDto;
 import Latam.Latam.work.hub.dtos.common.BookingResponseDto;
-import Latam.Latam.work.hub.entities.BookingEntity;
 import Latam.Latam.work.hub.enums.BookingStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

@@ -29,11 +29,12 @@ public interface RentalContractService {
     List<PendingInvoiceDto> getPendingInvoices(Long contractId);
 
     /**
-     * Genera el link de pago para la factura actual de un contrato
+     * Genera el link de pago para la factura actual de un contrato con monto personalizado
      * @param contractId ID del contrato
+     * @param paymentRequest Datos del pago incluyendo el monto total calculado
      * @return URL para realizar el pago
      */
-    String generateCurrentInvoicePaymentLink(Long contractId);
+    String generateCurrentInvoicePaymentLink(Long contractId, PaymentRequestDto paymentRequest);
 
 
     /**
@@ -64,7 +65,13 @@ public interface RentalContractService {
      */
     String renewContract(Long contractId, Integer months);
     void processAutoRenewals();
+    
+    /**
+     * @deprecated Este método está siendo reemplazado por la lógica consolidada en ContractScheduler.
+     */
+    @Deprecated
     void updateSpaceStatuses();
+    
     void processExpiringContracts();
     void executeAutoRenewals();
 
@@ -77,5 +84,9 @@ public interface RentalContractService {
     String generateInvoicePaymentLink(Long invoiceId);
     void processCompletedContractsAndDeposits();
 
+    /**
+     * @deprecated Este método está siendo reemplazado por la lógica consolidada en ContractScheduler.
+     */
+    @Deprecated
     void updateConfirmedToActiveContracts();
 }

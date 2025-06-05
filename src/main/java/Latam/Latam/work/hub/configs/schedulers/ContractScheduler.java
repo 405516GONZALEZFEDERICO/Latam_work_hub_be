@@ -2,14 +2,15 @@ package Latam.Latam.work.hub.configs.schedulers;
 
 import Latam.Latam.work.hub.entities.RentalContractEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
+import Latam.Latam.work.hub.enums.BookingStatus;
 import Latam.Latam.work.hub.enums.ContractStatus;
+import Latam.Latam.work.hub.repositories.BookingRepository;
 import Latam.Latam.work.hub.repositories.RentalContractRepository;
 import Latam.Latam.work.hub.repositories.SpaceRepository;
 import Latam.Latam.work.hub.services.RentalContractService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -25,9 +26,8 @@ import java.util.Optional;
 @Slf4j
 public class ContractScheduler {
     private final SpaceRepository spaceRepository;
-
-    private  final RentalContractRepository rentalContractRepository;
-
+    private final BookingRepository bookingRepository;
+    private final RentalContractRepository rentalContractRepository;
     private final RentalContractService rentalContractService;
 
     /**
@@ -53,14 +53,12 @@ public class ContractScheduler {
     public void checkOverdueInvoices() {
         log.info("Iniciando verificación de facturas vencidas");
         try {
-            // Esta funcionalidad podría agregarse al servicio de contratos o facturas
-             rentalContractService.checkOverdueInvoices();
+            rentalContractService.checkOverdueInvoices();
             log.info("Verificación de facturas vencidas completada con éxito");
         } catch (Exception e) {
             log.error("Error al verificar facturas vencidas: {}", e.getMessage(), e);
         }
     }
-
 
     /**
      * Verifica contratos para renovación automática
@@ -74,21 +72,6 @@ public class ContractScheduler {
             log.info("Verificación de renovaciones automáticas completada con éxito");
         } catch (Exception e) {
             log.error("Error al verificar renovaciones automáticas: {}", e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Actualiza el estado de los espacios según contratos activos
-     * Se ejecuta cada día a las 1:00 AM
-     */
-    @Scheduled(cron = "0 0 1 * * ?")
-    public void updateSpaceStatus() {
-        log.info("Iniciando actualización de estado de espacios");
-        try {
-            rentalContractService.updateSpaceStatuses();
-            log.info("Actualización de estado de espacios completada");
-        } catch (Exception e) {
-            log.error("Error al actualizar estados de espacios: {}", e.getMessage(), e);
         }
     }
 
@@ -107,11 +90,9 @@ public class ContractScheduler {
         }
     }
 
-
-
     /**
      * Verifica contratos terminados y procesa devoluciones de depósitos
-     * Se ejecuta cada día a las 4:00 AM
+     * Se ejecuta cada día a las 6:00 AM
      */
     @Scheduled(cron = "0 0 6 * * ?")
     public void processCompletedContractsAndDeposits() {
@@ -139,37 +120,83 @@ public class ContractScheduler {
         }
     }
 
-    @Scheduled(fixedRate = 1000)
-    public void updateConfirmedToActiveContracts() {
+    /**
+     * Actualiza estados de contratos y disponibilidad de espacios
+     * Consolidada toda la lógica de actualización en un solo método
+     * Se ejecuta cada 5 minutos para mantener la consistencia sin sobrecargar el sistema
+     */
+    @Scheduled(fixedRate = 300000) // 5 minutos
+    @Transactional
+    public void updateContractsAndSpacesStatus() {
         try {
-            rentalContractService.updateConfirmedToActiveContracts();
+            LocalDate today = LocalDate.now();
+            log.debug("Iniciando actualización consolidada de contratos y espacios");
+
+            // 1. Actualizar contratos CONFIRMADOS a ACTIVOS (incluye contratos atrasados)
+            updateConfirmedToActiveContracts(today);
+
+            // 2. Actualizar disponibilidad de todos los espacios
+            updateSpacesAvailability(today);
+
+            log.debug("Actualización consolidada completada");
         } catch (Exception e) {
-            log.error("Error al actualizar contratos CONFIRMADOS a ACTIVOS: {}", e.getMessage(), e);
+            log.error("Error en actualización consolidada de contratos y espacios: {}", e.getMessage(), e);
         }
     }
 
-    @Scheduled(fixedRate = 1000)
-    @Transactional
-    public void updateSpacesAvailability() {
+    /**
+     * Actualiza contratos CONFIRMADOS a ACTIVOS
+     * Incluye contratos que debían empezar en el pasado (para casos donde la app no estaba corriendo)
+     */
+    private void updateConfirmedToActiveContracts(LocalDate today) {
+        // Buscar contratos CONFIRMADOS que ya debían haber empezado (startDate <= today)
+        List<RentalContractEntity> confirmedContracts = rentalContractRepository
+                .findByContractStatusAndStartDateLessThanEqual(ContractStatus.CONFIRMED, today);
 
+        if (confirmedContracts.isEmpty()) {
+            return;
+        }
+
+        log.info("Actualizando {} contratos de CONFIRMADO a ACTIVO", confirmedContracts.size());
+
+        for (RentalContractEntity contract : confirmedContracts) {
+            contract.setContractStatus(ContractStatus.ACTIVE);
+            rentalContractRepository.save(contract);
+            log.debug("Contrato {} actualizado a ACTIVO (inicio: {})", 
+                     contract.getId(), contract.getStartDate());
+        }
+    }
+
+    /**
+     * Actualiza la disponibilidad de todos los espacios basándose en contratos y reservas activas
+     */
+    private void updateSpacesAvailability(LocalDate today) {
         List<SpaceEntity> spaces = spaceRepository.findAll();
-        LocalDate today = LocalDate.now();
 
         for (SpaceEntity space : spaces) {
-            Optional<RentalContractEntity> activeContract = rentalContractRepository.findBySpaceIdAndContractStatusAndEndDateGreaterThanEqual(
+            // Verificar si hay contratos activos
+            Optional<RentalContractEntity> activeContract = rentalContractRepository
+                    .findBySpaceIdAndContractStatusAndEndDateGreaterThanEqual(
+                            space.getId(),
+                            ContractStatus.ACTIVE,
+                            today
+                    );
+
+            // Verificar si hay reservas activas o confirmadas
+            boolean hasActiveBookings = bookingRepository.existsBySpaceIdAndStatusIn(
                     space.getId(),
-                    ContractStatus.ACTIVE,
-                    today
+                    List.of(BookingStatus.ACTIVE, BookingStatus.CONFIRMED)
             );
 
-            // Actualizar disponibilidad
-            boolean shouldBeAvailable = !activeContract.isPresent();
+            // El espacio debería estar disponible solo si NO hay contratos activos Y NO hay reservas activas/confirmadas
+            boolean shouldBeAvailable = !activeContract.isPresent() && !hasActiveBookings;
+            
             if (space.getAvailable() != shouldBeAvailable) {
                 space.setAvailable(shouldBeAvailable);
                 spaceRepository.save(space);
+                log.debug("Espacio {} actualizado: available={} (contrato activo: {}, reservas activas: {})", 
+                         space.getId(), shouldBeAvailable, activeContract.isPresent(), hasActiveBookings);
             }
         }
     }
-
-
 }

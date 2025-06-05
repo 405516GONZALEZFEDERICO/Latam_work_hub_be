@@ -3,18 +3,20 @@ package Latam.Latam.work.hub.services.impl;
 import Latam.Latam.work.hub.configs.state.machine.contract.ContractPolicyService;
 import Latam.Latam.work.hub.configs.state.machine.contract.NotificationRetryService;
 import Latam.Latam.work.hub.configs.state.machine.contract.StateMachineContract;
+import Latam.Latam.work.hub.dtos.common.InvoiceAmenityDto;
 import Latam.Latam.work.hub.dtos.common.InvoiceHistoryDto;
 import Latam.Latam.work.hub.dtos.common.PendingInvoiceDto;
 import Latam.Latam.work.hub.dtos.common.RentalContractDto;
 import Latam.Latam.work.hub.dtos.common.RentalContractResponseDto;
 import Latam.Latam.work.hub.dtos.common.isAutoRenewalDto;
-import Latam.Latam.work.hub.entities.BookingEntity;
+import Latam.Latam.work.hub.dtos.common.PaymentRequestDto;
 import Latam.Latam.work.hub.entities.InvoiceEntity;
 import Latam.Latam.work.hub.entities.RentalContractEntity;
 import Latam.Latam.work.hub.entities.SpaceEntity;
 import Latam.Latam.work.hub.entities.UserEntity;
 import Latam.Latam.work.hub.enums.ContractStatus;
 import Latam.Latam.work.hub.enums.InvoiceStatus;
+import Latam.Latam.work.hub.enums.InvoiceType;
 import Latam.Latam.work.hub.repositories.InvoiceRepository;
 import Latam.Latam.work.hub.repositories.RentalContractRepository;
 import Latam.Latam.work.hub.repositories.SpaceRepository;
@@ -39,7 +41,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -153,8 +154,17 @@ public class RentalContractServiceImpl implements RentalContractService {
             stateMachine.transition(savedContract, ContractStatus.PENDING);
             rentalContractRepository.save(savedContract);
 
-            // Establecer monto inicial (incluye depósito + primer mes)
+            // Establecer monto inicial (incluye depósito + primer mes + amenities)
             double initialAmount = contractDto.getMonthlyAmount() + contractDto.getDepositAmount();
+            
+            // Agregar precio de amenities si están seleccionadas
+            if (contractDto.getAmenitiesPrice() != null && contractDto.getAmenitiesPrice() > 0) {
+                initialAmount += contractDto.getAmenitiesPrice();
+                log.info("Contrato con amenities - Mensual: ${}, Depósito: ${}, Amenities: ${}, Total: ${}", 
+                        contractDto.getMonthlyAmount(), contractDto.getDepositAmount(), 
+                        contractDto.getAmenitiesPrice(), initialAmount);
+            }
+            
             savedContract.setAmount(initialAmount);
 
             // Generar factura inicial
@@ -359,7 +369,14 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
                         invoice.getIssueDate(),
                         invoice.getDueDate(),
                         invoice.getStatus().toString(),
-                        invoice.getInvoiceNumber()
+                        invoice.getInvoiceNumber(),
+                        invoice.getRentalContract().getSpace().getAmenities().stream()
+                                .map(amenity -> new InvoiceAmenityDto(
+                                        amenity.getId(),
+                                        amenity.getName(),
+                                        amenity.getPrice()
+                                ))
+                                .collect(Collectors.toList())
                 ))
                 .collect(Collectors.toList());
     }
@@ -374,7 +391,7 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
 
     @Override
     @Transactional
-    public String generateCurrentInvoicePaymentLink(Long contractId) {
+    public String generateCurrentInvoicePaymentLink(Long contractId, PaymentRequestDto paymentRequest) {
         RentalContractEntity contract = rentalContractRepository.findById(contractId)
                 .orElseThrow(() -> new EntityNotFoundException("Contrato no encontrado"));
 
@@ -384,19 +401,51 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
             throw new RuntimeException("No hay facturas pendientes para este contrato");
         }
 
-        // Establecer el monto de la factura en el contrato para cumplir con Billable
-        contract.setAmount(currentInvoice.getTotalAmount());
+        // Usar el monto total calculado por el frontend (incluye amenities)
+        Double totalAmountFromFrontend = paymentRequest.getTotalAmount();
+        if (totalAmountFromFrontend == null || totalAmountFromFrontend <= 0) {
+            throw new RuntimeException("El monto total debe ser mayor a cero");
+        }
+
+        // VERIFICAR SI ES LA FACTURA INICIAL (incluye depósito)
+        boolean isInitialInvoice = (contract.getContractStatus() == ContractStatus.PENDING || 
+                                   contract.getContractStatus() == ContractStatus.CONFIRMED) &&
+                                   currentInvoice.getType() == InvoiceType.CONTRACT;
+        
+        Double finalAmount = totalAmountFromFrontend;
+        
+        // Si es la factura inicial, agregar el depósito al monto del frontend
+        if (isInitialInvoice) {
+            finalAmount = totalAmountFromFrontend + contract.getDepositAmount();
+            log.info("Factura inicial detectada - Monto frontend: ${}, Depósito: ${}, Total final: ${}", 
+                    totalAmountFromFrontend, contract.getDepositAmount(), finalAmount);
+        }
 
         try {
-            // Actualizar estado de la factura
+            // Actualizar la factura con el nuevo monto total
+            currentInvoice.setTotalAmount(finalAmount);
             currentInvoice.setStatus(InvoiceStatus.ISSUED);
+            
+            // Actualizar descripción si se proporciona
+            String description = paymentRequest.getDescription();
+            if (description != null && !description.trim().isEmpty()) {
+                if (isInitialInvoice) {
+                    description += " + Depósito";
+                }
+                currentInvoice.setDescription(description);
+            }
+            
             invoiceRepository.save(currentInvoice);
 
-            // Generar link de pago usando el servicio de facturas
+            // Establecer el monto en el contrato para cumplir con Billable
+            contract.setAmount(finalAmount);
+
+            // Generar link de pago usando el monto actualizado
             return mercadoPagoService.createInvoicePaymentPreference(
                     currentInvoice.getId(),
-                    "Pago mensual de alquiler: " + contract.getSpace().getName(),
-                    BigDecimal.valueOf(currentInvoice.getTotalAmount()),
+                    currentInvoice.getDescription() != null ? currentInvoice.getDescription() : 
+                        (isInitialInvoice ? "Pago inicial contrato: " : "Pago mensual de alquiler: ") + contract.getSpace().getName(),
+                    BigDecimal.valueOf(finalAmount),
                     contract.getTenant().getEmail(),
                     contract.getSpace().getOwner().getEmail()
             );
@@ -821,8 +870,14 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
         );
     }
 
+    /**
+     * @deprecated Este método está siendo reemplazado por la lógica consolidada en ContractScheduler.
+     * Se mantiene por compatibilidad, pero la lógica principal está en updateContractsAndSpacesStatus()
+     */
     @Override
+    @Deprecated
     public void updateSpaceStatuses() {
+        log.warn("updateSpaceStatuses() está deprecado. Usar ContractScheduler.updateContractsAndSpacesStatus()");
         List<RentalContractEntity> activeContracts = rentalContractRepository
                 .findByContractStatus(ContractStatus.ACTIVE);
 
@@ -1009,19 +1064,24 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
 
     @Override
     public void updateConfirmedToActiveContracts() {
+        log.warn("updateConfirmedToActiveContracts() está deprecado. Usar ContractScheduler.updateContractsAndSpacesStatus()");
         LocalDate today = LocalDate.now();
 
-        // Filtrar contratos directamente en la base de datos
-        List<RentalContractEntity> confirmedContracts = rentalContractRepository.findByContractStatusAndStartDate(ContractStatus.CONFIRMED, today);
+        // Usar el nuevo método que incluye contratos atrasados
+        List<RentalContractEntity> confirmedContracts = rentalContractRepository
+                .findByContractStatusAndStartDateLessThanEqual(ContractStatus.CONFIRMED, today);
 
         if (confirmedContracts.isEmpty()) {
             return;
         }
 
+        log.info("Actualizando {} contratos de CONFIRMADO a ACTIVO", confirmedContracts.size());
 
         for (RentalContractEntity contract : confirmedContracts) {
             contract.setContractStatus(ContractStatus.ACTIVE);
             rentalContractRepository.save(contract);
+            log.debug("Contrato {} actualizado a ACTIVO (inicio: {})", 
+                     contract.getId(), contract.getStartDate());
         }
     }
 

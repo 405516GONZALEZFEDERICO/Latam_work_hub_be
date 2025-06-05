@@ -1,4 +1,4 @@
-package Latam.Latam.work.hub.dtos.common.dashboard.admin;
+package Latam.Latam.work.hub.dtos.common.dashboard.proveedor;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,10 +9,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class KpiCardsDto {
-    private long activeClients;
-    private long activeProviders;
-    private long publishedSpaces;
+public class ProviderKpiCardsDto {
+    private long totalSpaces;
+    private long activeContracts;
     private long reservationsThisMonth;
     
     // Ingresos diferenciados
@@ -23,7 +22,8 @@ public class KpiCardsDto {
     // Para compatibilidad hacia atrás - será igual a totalNetRevenueLast30Days
     @Deprecated
     private Double totalRevenueLast30Days;
-
-    private long activeContracts;           // Para "Contratos Activos"
-    private long contractsExpiringSoon;     // Para "Contratos Próximos a Vencer (ej. 30 días)"
-}
+    
+    private long spacesOccupied;
+    private long spacesAvailable;
+    private Double occupancyRate;
+} 

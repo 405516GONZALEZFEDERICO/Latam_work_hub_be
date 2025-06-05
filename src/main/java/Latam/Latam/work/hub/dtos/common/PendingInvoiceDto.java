@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -18,4 +19,5 @@ public class PendingInvoiceDto {
     private LocalDateTime dueDate;
     private String status;
     private String invoiceNumber;
+    private List<InvoiceAmenityDto> amenities;
 }
