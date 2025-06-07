@@ -15,6 +15,8 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -27,6 +29,7 @@ import java.util.Optional;
 public class InvoiceServiceImpl implements InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final MercadoPagoService mercadoPagoService;
+    private static final Logger log = LoggerFactory.getLogger(InvoiceServiceImpl.class);
 
     @Override
     @Transactional
@@ -40,11 +43,13 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoiceEntity.setBooking(booking);
             invoiceEntity.setType(InvoiceType.BOOKING);
             title = "Reserva de espacio: " + booking.getSpace().getName();
+            log.info("Creando factura para reserva - ID: {}, Monto: ${}", booking.getId(), booking.getAmount());
         } else if (entity instanceof RentalContractEntity) {
             RentalContractEntity contract = (RentalContractEntity) entity;
             invoiceEntity.setRentalContract(contract);
             invoiceEntity.setType(InvoiceType.CONTRACT);
             title = "Contrato de alquiler: " + contract.getSpace().getName();
+            log.info("Creando factura para contrato - ID: {}, Monto obtenido: ${}", contract.getId(), contract.getAmount());
         } else {
             throw new IllegalArgumentException("Tipo de entidad no soportado");
         }
@@ -53,20 +58,28 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoiceEntity.setInvoiceNumber(generateInvoiceNumber());
         invoiceEntity.setIssueDate(LocalDateTime.now());
         invoiceEntity.setDueDate(LocalDateTime.now().plusDays(30));
-        invoiceEntity.setTotalAmount(entity.getAmount());
+        Double entityAmount = entity.getAmount();
+        invoiceEntity.setTotalAmount(entityAmount);
         invoiceEntity.setStatus(InvoiceStatus.DRAFT);
+
+        log.info("Configurando factura - Número: {}, TotalAmount: ${}, Estado: {}", 
+                invoiceEntity.getInvoiceNumber(), entityAmount, invoiceEntity.getStatus());
 
         // Guardar la factura para obtener el ID
         InvoiceEntity savedInvoice = invoiceRepository.save(invoiceEntity);
+        log.info("Factura guardada - ID: {}, TotalAmount final: ${}", savedInvoice.getId(), savedInvoice.getTotalAmount());
 
         // Crear preferencia de pago
-        return mercadoPagoService.createInvoicePaymentPreference(
+        String paymentUrl = mercadoPagoService.createInvoicePaymentPreference(
                 savedInvoice.getId(),
                 title,
-                BigDecimal.valueOf(entity.getAmount()),
+                BigDecimal.valueOf(entityAmount),
                 getBuyerEmail(entity),
                 getSellerEmail(entity)
         );
+        
+        log.info("Preferencia de pago creada para factura ID: {}", savedInvoice.getId());
+        return paymentUrl;
     }
 
     @Override

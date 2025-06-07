@@ -198,7 +198,7 @@ Double sumRevenueByProviderId(
         LEFT JOIN i.booking b
         LEFT JOIN i.rentalContract rc
         WHERE (b.user.id = :clientId OR rc.tenant.id = :clientId)
-        AND i.status = 'PAID'
+        AND i.status IN ('PAID', 'ISSUED')
         AND (:startDate IS NULL OR i.issueDate >= :startDate)
         AND (:endDate IS NULL OR i.issueDate <= :endDate)
     """)
@@ -298,17 +298,38 @@ Double sumRevenueByProviderId(
     // ===== MÉTODOS PARA DASHBOARD CLIENTE =====
     
     /**
-     * Obtiene gastos mensuales de un cliente específico
+     * Obtiene gastos mensuales de un cliente específico SOLO DE CONTRATOS
+     * CORREGIDO: Usa la fecha de inicio del contrato para agrupar por mes
+     */
+    @Query("SELECT FUNCTION('YEAR', inv.rentalContract.startDate) as year, " +
+           "FUNCTION('MONTH', inv.rentalContract.startDate) as month, " +
+           "SUM(inv.totalAmount) as spending " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.tenant.id = :clientId " +
+           "AND inv.status IN ('PAID', 'ISSUED') " +
+           "AND inv.rentalContract.startDate >= FUNCTION('DATE', :startDate) " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "GROUP BY FUNCTION('YEAR', inv.rentalContract.startDate), " +
+           "FUNCTION('MONTH', inv.rentalContract.startDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlySpendingByClientContracts(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    /**
+     * Obtiene gastos mensuales de un cliente específico SOLO DE RESERVAS 
      */
     @Query("SELECT FUNCTION('YEAR', inv.issueDate) as year, FUNCTION('MONTH', inv.issueDate) as month, " +
            "SUM(inv.totalAmount) as spending " +
            "FROM InvoiceEntity inv " +
-           "WHERE (inv.rentalContract.tenant.id = :clientId OR inv.booking.user.id = :clientId) " +
-           "AND inv.status = 'PAID' " +
+           "WHERE inv.booking.user.id = :clientId " +
+           "AND inv.status IN ('PAID', 'ISSUED') " +
            "AND inv.issueDate >= :startDate " +
+           "AND inv.booking IS NOT NULL " +
            "GROUP BY FUNCTION('YEAR', inv.issueDate), FUNCTION('MONTH', inv.issueDate) " +
            "ORDER BY year ASC, month ASC")
-    List<Object[]> findMonthlySpendingByClient(
+    List<Object[]> findMonthlySpendingByClientBookings(
             @Param("clientId") Long clientId,
             @Param("startDate") LocalDateTime startDate
     );
@@ -416,11 +437,12 @@ Double sumRevenueByProviderId(
     
     /**
      * Gastos BRUTOS por cliente de CONTRATOS (sin descontar reembolsos) - CLIENTE
+     * CORREGIDO: Incluye facturas PAID e ISSUED
      */
     @Query("SELECT COALESCE(SUM(inv.totalAmount), 0.0) " +
            "FROM InvoiceEntity inv " +
            "WHERE inv.rentalContract.tenant.id = :clientId " +
-           "AND inv.status = 'PAID' " +
+           "AND inv.status IN ('PAID', 'ISSUED') " +
            "AND inv.issueDate >= :startDate " +
            "AND inv.issueDate <= :endDate " +
            "AND inv.rentalContract IS NOT NULL")
@@ -478,6 +500,55 @@ Double sumRevenueByProviderId(
             @Param("clientId") Long clientId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate
+    );
+
+    /**
+     * DEBUG: Busca TODAS las facturas de contratos de un cliente sin filtrar por estado
+     */
+    @Query("SELECT inv FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.tenant.id = :clientId " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.issueDate <= :endDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "ORDER BY inv.issueDate DESC")
+    List<InvoiceEntity> findAllContractInvoicesByClientId(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate
+    );
+
+    /**
+     * DEBUG: Lista todas las facturas de contratos de un cliente para investigar gastos mensuales
+     */
+    @Query("SELECT inv.id, inv.invoiceNumber, inv.totalAmount, inv.issueDate, inv.status, inv.rentalContract.startDate " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.tenant.id = :clientId " +
+           "AND inv.status IN ('PAID', 'ISSUED') " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "ORDER BY inv.issueDate DESC")
+    List<Object[]> findAllContractInvoicesForDebug(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    /**
+     * Obtiene gastos mensuales de un cliente específico SOLO DE CONTRATOS con LocalDate
+     */
+    @Query("SELECT FUNCTION('YEAR', inv.rentalContract.startDate) as year, " +
+           "FUNCTION('MONTH', inv.rentalContract.startDate) as month, " +
+           "SUM(inv.totalAmount) as spending " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.tenant.id = :clientId " +
+           "AND inv.status IN ('PAID', 'ISSUED') " +
+           "AND inv.rentalContract.startDate >= :startDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "GROUP BY FUNCTION('YEAR', inv.rentalContract.startDate), " +
+           "FUNCTION('MONTH', inv.rentalContract.startDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlySpendingByClientContractsWithLocalDate(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDate startDate
     );
 
 }

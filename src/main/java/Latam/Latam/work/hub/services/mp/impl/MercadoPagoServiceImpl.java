@@ -32,6 +32,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -51,6 +53,7 @@ import java.util.UUID;
 @Service
 public class MercadoPagoServiceImpl implements MercadoPagoService {
 
+    private static final Logger log = LoggerFactory.getLogger(MercadoPagoServiceImpl.class);
     private static final String CURRENCY = "ARS";
     
     // Cache para evitar procesamiento duplicado simultáneo
@@ -102,6 +105,10 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
     public String createInvoicePaymentPreference(Long invoiceId, String title, BigDecimal amount,
                                                  String buyerEmail, String sellerEmail) throws MPException, MPApiException {
         try {
+            log.info("=== INICIO createInvoicePaymentPreference ===");
+            log.info("Parámetros recibidos - InvoiceID: {}, Title: {}, Amount: {}, Buyer: {}, Seller: {}", 
+                    invoiceId, title, amount, buyerEmail, sellerEmail);
+
             List<PreferenceItemRequest> items = new ArrayList<>();
             PreferenceItemRequest item = PreferenceItemRequest.builder()
                     .title(title)
@@ -110,6 +117,8 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                     .currencyId(CURRENCY)
                     .build();
             items.add(item);
+
+            log.info("Item de preferencia creado - UnitPrice: {}", amount);
 
             String buyerEmailTest = "test_user_1440077709@testuser.com";
             String sellerEmailTest = "test_user_11222044@testuser.com";
@@ -151,14 +160,23 @@ public class MercadoPagoServiceImpl implements MercadoPagoService {
                     .autoReturn("approved")
                     .build();
 
+            log.info("PreferenceRequest configurado para factura ID: {}", invoiceId);
+
             invoiceRepository.findById(invoiceId).ifPresent(invoice -> {
+                log.info("Actualizando estado de factura ID {} a ISSUED - TotalAmount en BD: {}", 
+                        invoiceId, invoice.getTotalAmount());
                 invoice.setStatus(InvoiceStatus.ISSUED);
                 invoiceRepository.save(invoice);
             });
 
             Preference preference = preferenceClient.create(preferenceRequest);
+            log.info("Preferencia creada exitosamente - ID: {}, InitPoint: {}", 
+                    preference.getId(), preference.getInitPoint());
+            log.info("=== FIN createInvoicePaymentPreference ===");
+            
             return preference.getInitPoint();
         } catch (MPException | MPApiException e) {
+            log.error("Error al crear preferencia de pago para factura {}: {}", invoiceId, e.getMessage());
             throw e;
         }
     }

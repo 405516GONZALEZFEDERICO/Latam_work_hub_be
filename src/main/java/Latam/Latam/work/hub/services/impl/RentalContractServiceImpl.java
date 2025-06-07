@@ -160,15 +160,29 @@ public class RentalContractServiceImpl implements RentalContractService {
             // Agregar precio de amenities si están seleccionadas
             if (contractDto.getAmenitiesPrice() != null && contractDto.getAmenitiesPrice() > 0) {
                 initialAmount += contractDto.getAmenitiesPrice();
-                log.info("Contrato con amenities - Mensual: ${}, Depósito: ${}, Amenities: ${}, Total: ${}", 
+                log.info("Contrato con amenities - Mensual: ${}, Depósito: ${}, Amenities: ${}, Total inicial: ${}", 
                         contractDto.getMonthlyAmount(), contractDto.getDepositAmount(), 
                         contractDto.getAmenitiesPrice(), initialAmount);
+            } else {
+                log.info("Contrato sin amenities - Mensual: ${}, Depósito: ${}, Total inicial: ${}", 
+                        contractDto.getMonthlyAmount(), contractDto.getDepositAmount(), initialAmount);
             }
             
             savedContract.setAmount(initialAmount);
+            log.info("Monto establecido en contrato ID {}: ${}", savedContract.getId(), savedContract.getAmount());
 
             // Generar factura inicial
             String paymentUrl = invoiceService.createInvoice(savedContract);
+            log.info("Factura inicial creada para contrato ID {}", savedContract.getId());
+
+            // Verificar el monto de la factura creada
+            InvoiceEntity createdInvoice = getCurrentInvoice(savedContract.getId());
+            if (createdInvoice != null) {
+                log.info("Factura creada - ID: {}, TotalAmount: ${}, Status: {}", 
+                        createdInvoice.getId(), createdInvoice.getTotalAmount(), createdInvoice.getStatus());
+            } else {
+                log.warn("No se pudo obtener la factura recién creada para el contrato ID {}", savedContract.getId());
+            }
 
             // Notificar al propietario
             notifyOwnerAboutNewContract(savedContract);
@@ -407,51 +421,76 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
             throw new RuntimeException("El monto total debe ser mayor a cero");
         }
 
+        log.info("=== INICIO generateCurrentInvoicePaymentLink ===");
+        log.info("Contrato ID: {}, Factura ID: {}", contractId, currentInvoice.getId());
+        log.info("Monto recibido del frontend: ${}", totalAmountFromFrontend);
+        log.info("Estado del contrato: {}, Tipo de factura: {}", contract.getContractStatus(), currentInvoice.getType());
+
         // VERIFICAR SI ES LA FACTURA INICIAL (incluye depósito)
         boolean isInitialInvoice = (contract.getContractStatus() == ContractStatus.PENDING || 
                                    contract.getContractStatus() == ContractStatus.CONFIRMED) &&
                                    currentInvoice.getType() == InvoiceType.CONTRACT;
         
+        // El frontend ya calcula e incluye TODOS los montos (mensual + depósito + amenities)
+        // No necesitamos sumar nada adicional
         Double finalAmount = totalAmountFromFrontend;
         
-        // Si es la factura inicial, agregar el depósito al monto del frontend
         if (isInitialInvoice) {
-            finalAmount = totalAmountFromFrontend + contract.getDepositAmount();
-            log.info("Factura inicial detectada - Monto frontend: ${}, Depósito: ${}, Total final: ${}", 
-                    totalAmountFromFrontend, contract.getDepositAmount(), finalAmount);
+            log.info("Factura inicial detectada - Usando monto completo del frontend: ${} (incluye mensual + depósito + amenities)", 
+                    finalAmount);
+        } else {
+            log.info("Factura mensual - Usando monto del frontend: ${}", finalAmount);
+        }
+
+        // Validación de rango esperado
+        Double expectedMinAmount = contract.getMonthlyAmount();
+        Double expectedMaxAmount = contract.getMonthlyAmount() + contract.getDepositAmount() + 1000; // +1000 para amenities
+        
+        if (isInitialInvoice && (finalAmount < expectedMinAmount || finalAmount > expectedMaxAmount)) {
+            log.warn("ADVERTENCIA: Monto de factura fuera del rango esperado para factura inicial. " +
+                    "Monto: ${}, Rango esperado: ${} - ${}", 
+                    finalAmount, expectedMinAmount, expectedMaxAmount);
         }
 
         try {
-            // Actualizar la factura con el nuevo monto total
+            // Actualizar la factura con el monto correcto del frontend
             currentInvoice.setTotalAmount(finalAmount);
             currentInvoice.setStatus(InvoiceStatus.ISSUED);
             
             // Actualizar descripción si se proporciona
             String description = paymentRequest.getDescription();
             if (description != null && !description.trim().isEmpty()) {
-                if (isInitialInvoice) {
-                    description += " + Depósito";
-                }
                 currentInvoice.setDescription(description);
             }
             
             invoiceRepository.save(currentInvoice);
+            log.info("Factura actualizada - ID: {}, TotalAmount: ${}, Status: {}", 
+                    currentInvoice.getId(), currentInvoice.getTotalAmount(), currentInvoice.getStatus());
 
             // Establecer el monto en el contrato para cumplir con Billable
             contract.setAmount(finalAmount);
 
-            // Generar link de pago usando el monto actualizado
-            return mercadoPagoService.createInvoicePaymentPreference(
+            String buyerEmail = contract.getTenant().getEmail();
+            String sellerEmail = contract.getSpace().getOwner().getEmail();
+
+            log.info("Generando preferencia de pago - Monto: {}, Comprador: {}, Vendedor: {}", 
+                    finalAmount, buyerEmail, sellerEmail);
+
+            String paymentUrl = mercadoPagoService.createInvoicePaymentPreference(
                     currentInvoice.getId(),
                     currentInvoice.getDescription() != null ? currentInvoice.getDescription() : 
                         (isInitialInvoice ? "Pago inicial contrato: " : "Pago mensual de alquiler: ") + contract.getSpace().getName(),
                     BigDecimal.valueOf(finalAmount),
-                    contract.getTenant().getEmail(),
-                    contract.getSpace().getOwner().getEmail()
+                    buyerEmail,
+                    sellerEmail
             );
+            
+            log.info("=== FIN generateCurrentInvoicePaymentLink - URL generada exitosamente ===");
+            return paymentUrl;
+            
         } catch (MPException | MPApiException e) {
-            log.error("Error al generar link de pago: {}", e.getMessage(), e);
-            throw new RuntimeException("Error al generar el link de pago: " + e.getMessage(), e);
+            log.error("Error al generar el link de pago: {}", e.getMessage(), e);
+            throw new RuntimeException("Error al generar el link de pago: " + e.getMessage());
         }
     }
 
@@ -968,38 +1007,93 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
 
     @Override
     public String generateInvoicePaymentLink(Long invoiceId) {
-//        contractDto.getStartDate().plusMonths(contractDto.getDurationMonths()));
-
-        InvoiceEntity invoiceEntity=this.invoiceRepository.findById(invoiceId).orElse(null);
-        RentalContractEntity rentalContract = invoiceEntity.getRentalContract();
-        Long spaceID = rentalContract.getSpace().getId();
-        LocalDate startDate = rentalContract.getStartDate();
-        LocalDate endDate = startDate.plusMonths(rentalContract.getDurationMonths().longValue());
-
-        // Validar solapamiento de contratos y reservas
-        bookingService.validateContractAndBookingOverlap(spaceID, startDate, endDate);
-
-
+        log.info("=== INICIO generateInvoicePaymentLink para factura ID: {} ===", invoiceId);
+        
+        // Buscar la factura una sola vez
         InvoiceEntity invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new RuntimeException("Factura no encontrada"));
+        
+        log.info("Factura encontrada - ID: {}, TotalAmount: {}, Status: {}", 
+                invoice.getId(), invoice.getTotalAmount(), invoice.getStatus());
 
         if (invoice.getStatus() == InvoiceStatus.PAID) {
             throw new RuntimeException("La factura ya está pagada");
         }
 
-        try {
-            RentalContractEntity contract = (RentalContractEntity) invoice.getRentalContract();
-            String buyerEmail = contract.getTenant().getEmail();
-            String sellerEmail = contract.getSpace().getOwner().getEmail();
+        // Validar que es una factura de contrato
+        if (invoice.getRentalContract() == null) {
+            throw new RuntimeException("Esta factura no está asociada a un contrato de alquiler");
+        }
 
-            return mercadoPagoService.createInvoicePaymentPreference(
-                    invoice.getId(),
-                    invoice.getDescription(),
-                    BigDecimal.valueOf(invoice.getTotalAmount()),
+        RentalContractEntity rentalContract = invoice.getRentalContract();
+        log.info("Contrato asociado - ID: {}, MonthlyAmount: {}, DepositAmount: {}", 
+                rentalContract.getId(), rentalContract.getMonthlyAmount(), rentalContract.getDepositAmount());
+
+        Long spaceID = rentalContract.getSpace().getId();
+        LocalDate startDate = rentalContract.getStartDate();
+        LocalDate endDate = startDate.plusMonths(rentalContract.getDurationMonths().longValue());
+
+        // Validar solapamiento de contratos y reservas
+        try {
+            bookingService.validateContractAndBookingOverlap(spaceID, startDate, endDate);
+            log.info("Validación de solapamiento exitosa");
+        } catch (Exception e) {
+            log.warn("Error en validación de solapamiento: {}", e.getMessage());
+            // No lanzamos excepción aquí para permitir el pago de facturas existentes
+        }
+
+        // Re-verificar el monto de la factura después de las validaciones
+        InvoiceEntity refreshedInvoice = invoiceRepository.findById(invoiceId)
+                .orElseThrow(() -> new RuntimeException("Factura no encontrada tras validación"));
+        
+        log.info("Factura re-verificada - TotalAmount: {} (era: {})", 
+                refreshedInvoice.getTotalAmount(), invoice.getTotalAmount());
+
+        // Usar la factura refrescada para asegurar datos actuales
+        Double finalAmount = refreshedInvoice.getTotalAmount();
+        
+        if (finalAmount == null || finalAmount <= 0) {
+            throw new RuntimeException("El monto de la factura no es válido: " + finalAmount);
+        }
+
+        // Validación adicional: verificar que el monto esté en un rango razonable
+        // basado en los datos del contrato
+        Double expectedMinAmount = rentalContract.getMonthlyAmount();
+        Double expectedMaxAmount = rentalContract.getMonthlyAmount() + rentalContract.getDepositAmount() + 1000; // +1000 para amenities
+        
+        if (finalAmount < expectedMinAmount || finalAmount > expectedMaxAmount) {
+            log.error("ADVERTENCIA: Monto de factura fuera del rango esperado. " +
+                    "Factura: {}, Rango esperado: {} - {}, Mensual: {}, Depósito: {}", 
+                    finalAmount, expectedMinAmount, expectedMaxAmount, 
+                    rentalContract.getMonthlyAmount(), rentalContract.getDepositAmount());
+        }
+
+        // Verificar que el monto no haya cambiado durante el proceso
+        if (!finalAmount.equals(invoice.getTotalAmount())) {
+            log.warn("ADVERTENCIA: El monto de la factura cambió durante el proceso de {} a {}", 
+                    invoice.getTotalAmount(), finalAmount);
+        }
+
+        try {
+            String buyerEmail = rentalContract.getTenant().getEmail();
+            String sellerEmail = rentalContract.getSpace().getOwner().getEmail();
+
+            log.info("Generando preferencia de pago - Monto: {}, Comprador: {}, Vendedor: {}", 
+                    finalAmount, buyerEmail, sellerEmail);
+
+            String paymentUrl = mercadoPagoService.createInvoicePaymentPreference(
+                    refreshedInvoice.getId(),
+                    refreshedInvoice.getDescription(),
+                    BigDecimal.valueOf(finalAmount),
                     buyerEmail,
                     sellerEmail
             );
+            
+            log.info("=== FIN generateInvoicePaymentLink - URL generada exitosamente ===");
+            return paymentUrl;
+            
         } catch (MPException | MPApiException e) {
+            log.error("Error al generar el link de pago: {}", e.getMessage(), e);
             throw new RuntimeException("Error al generar el link de pago: " + e.getMessage());
         }
     }

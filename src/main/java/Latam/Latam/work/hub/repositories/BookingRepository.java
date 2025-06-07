@@ -301,14 +301,17 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
 
     /**
      * Obtiene gastos mensuales de un cliente
+     * CORREGIDO: Usa la misma lógica de fechas que los KPI cards
      */
-    @Query("SELECT FUNCTION('YEAR', b.startDate) as year, FUNCTION('MONTH', b.startDate) as month, " +
+    @Query("SELECT FUNCTION('YEAR', COALESCE(b.updatedAt, b.startDate)) as year, " +
+           "FUNCTION('MONTH', COALESCE(b.updatedAt, b.startDate)) as month, " +
            "SUM(b.totalAmount) as spending " +
            "FROM BookingEntity b " +
            "WHERE b.user.id = :clientId " +
            "AND b.status IN ('CONFIRMED', 'COMPLETED', 'ACTIVE') " +
-           "AND b.startDate >= :startDate " +
-           "GROUP BY FUNCTION('YEAR', b.startDate), FUNCTION('MONTH', b.startDate) " +
+           "AND COALESCE(b.updatedAt, b.startDate) >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', COALESCE(b.updatedAt, b.startDate)), " +
+           "FUNCTION('MONTH', COALESCE(b.updatedAt, b.startDate)) " +
            "ORDER BY year ASC, month ASC")
     List<Object[]> findMonthlySpendingByClient(
             @Param("clientId") Long clientId,
