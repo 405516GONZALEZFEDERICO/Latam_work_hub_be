@@ -289,7 +289,9 @@ public isAutoRenewalDto isAutoRenewal(Long contractId) {
         // Retrieve the contract
         RentalContractEntity contract = rentalContractRepository.findById(contractId)
                 .orElseThrow(() -> new EntityNotFoundException("Contrato no encontrado"));
-
+        if(contract.getContractStatus().equals(ContractStatus.PENDING)){
+            throw new RuntimeException("El contrato no está en un estado que permita obtener la política de cancelación");
+        }
         // Get current date for calculations
         LocalDate today = LocalDate.now();
 

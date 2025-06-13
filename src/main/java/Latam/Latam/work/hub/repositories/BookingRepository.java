@@ -270,6 +270,25 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
             @Param("startDate") LocalDateTime startDate
     );
 
+    /**
+     * Obtiene ingresos mensuales BRUTOS de un proveedor (para gráfico monthly-revenue)
+     * Incluye CANCELADAS porque representan dinero generado, sin descontar reembolsos
+     */
+    @Query("SELECT FUNCTION('YEAR', b.startDate) as year, FUNCTION('MONTH', b.startDate) as month, " +
+           "SUM(b.totalAmount) as revenue " +
+           "FROM BookingEntity b " +
+           "WHERE b.space.owner.id = :providerId " +
+           "AND b.status IN ('CONFIRMED', 'COMPLETED', 'ACTIVE', 'CANCELED') " +
+           "AND b.status != 'PENDING_PAYMENT' " +
+           "AND b.status != 'DRAFT' " +
+           "AND b.startDate >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', b.startDate), FUNCTION('MONTH', b.startDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlyGrossRevenueByProvider(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
     // ===== MÉTODOS PARA DASHBOARD CLIENTE =====
     
     /**
@@ -314,6 +333,28 @@ public interface BookingRepository extends JpaRepository<BookingEntity, Long> {
            "FUNCTION('MONTH', COALESCE(b.updatedAt, b.startDate)) " +
            "ORDER BY year ASC, month ASC")
     List<Object[]> findMonthlySpendingByClient(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    /**
+     * Obtiene gastos mensuales BRUTOS de un cliente (para gráfico monthly-spending)
+     * Incluye CANCELADAS porque representan dinero gastado, sin descontar reembolsos
+     * Usa la MISMA lógica que los KPI cards
+     */
+    @Query("SELECT FUNCTION('YEAR', COALESCE(b.updatedAt, b.startDate)) as year, " +
+           "FUNCTION('MONTH', COALESCE(b.updatedAt, b.startDate)) as month, " +
+           "SUM(b.totalAmount) as spending " +
+           "FROM BookingEntity b " +
+           "WHERE b.user.id = :clientId " +
+           "AND b.status IN ('CONFIRMED', 'COMPLETED', 'ACTIVE', 'CANCELED') " +
+           "AND b.status != 'PENDING_PAYMENT' " +
+           "AND b.status != 'DRAFT' " +
+           "AND COALESCE(b.updatedAt, b.startDate) >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', COALESCE(b.updatedAt, b.startDate)), " +
+           "FUNCTION('MONTH', COALESCE(b.updatedAt, b.startDate)) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlyGrossSpendingByClient(
             @Param("clientId") Long clientId,
             @Param("startDate") LocalDateTime startDate
     );

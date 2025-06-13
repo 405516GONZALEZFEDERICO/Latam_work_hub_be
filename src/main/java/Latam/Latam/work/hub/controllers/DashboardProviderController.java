@@ -174,4 +174,63 @@ public class DashboardProviderController {
             return ResponseEntity.ok(debug);
         }
     }
+
+    /**
+     * Endpoint para debuggear facturas de contratos del cliente
+     */
+    @GetMapping("/debug-invoices")
+    public ResponseEntity<Map<String, Object>> debugInvoices(@RequestParam String uid) {
+        Map<String, Object> debugInfo = new HashMap<>();
+        
+        try {
+            UserEntity client = userRepository.findByFirebaseUid(uid)
+                    .orElseThrow(() -> new RuntimeException("Cliente no encontrado"));
+            
+            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+            LocalDateTime now = LocalDateTime.now();
+            
+            List<InvoiceEntity> allContractInvoices = invoiceRepository.findAllContractInvoicesByClientId(
+                    client.getId(), thirtyDaysAgo, now);
+            
+            Map<String, List<Map<String, Object>>> invoicesByStatus = new HashMap<>();
+            double totalByStatus = 0.0;
+            
+            for (InvoiceEntity invoice : allContractInvoices) {
+                String status = invoice.getStatus().name();
+                if (!invoicesByStatus.containsKey(status)) {
+                    invoicesByStatus.put(status, new ArrayList<>());
+                }
+                
+                Map<String, Object> invoiceInfo = new HashMap<>();
+                invoiceInfo.put("id", invoice.getId());
+                invoiceInfo.put("invoiceNumber", invoice.getInvoiceNumber());
+                invoiceInfo.put("totalAmount", invoice.getTotalAmount());
+                invoiceInfo.put("issueDate", invoice.getIssueDate());
+                invoiceInfo.put("dueDate", invoice.getDueDate());
+                invoiceInfo.put("contractId", invoice.getRentalContract() != null ? invoice.getRentalContract().getId() : null);
+                
+                invoicesByStatus.get(status).add(invoiceInfo);
+                
+                if ("PAID".equals(status)) {
+                    totalByStatus += invoice.getTotalAmount() != null ? invoice.getTotalAmount() : 0.0;
+                }
+            }
+            
+            debugInfo.put("clientId", client.getId());
+            debugInfo.put("clientFirebaseUid", uid);
+            debugInfo.put("dateRange", Map.of("from", thirtyDaysAgo, "to", now));
+            debugInfo.put("totalInvoicesFound", allContractInvoices.size());
+            debugInfo.put("invoicesByStatus", invoicesByStatus);
+            debugInfo.put("totalPaidAmount", totalByStatus);
+            debugInfo.put("status", "success");
+            
+        } catch (Exception e) {
+            debugInfo.put("status", "error");
+            debugInfo.put("message", e.getMessage());
+        }
+        
+        return ResponseEntity.ok(debugInfo);
+    }
+
+ 
 } 

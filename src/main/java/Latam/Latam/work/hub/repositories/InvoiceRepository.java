@@ -295,6 +295,25 @@ Double sumRevenueByProviderId(
             @Param("startDate") LocalDateTime startDate
     );
 
+    /**
+     * Obtiene ingresos mensuales BRUTOS de un proveedor específico (para gráfico monthly-revenue)
+     * Solo totalAmount sin descontar reembolsos, para coincidir con la lógica del admin
+     */
+    @Query("SELECT FUNCTION('YEAR', inv.issueDate) as year, FUNCTION('MONTH', inv.issueDate) as month, " +
+           "SUM(inv.totalAmount) as revenue " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.space.owner.id = :providerId " +
+           "AND inv.status = 'PAID' " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "AND inv.booking IS NULL " +
+           "AND inv.issueDate >= :startDate " +
+           "GROUP BY FUNCTION('YEAR', inv.issueDate), FUNCTION('MONTH', inv.issueDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlyGrossRevenueByProvider(
+            @Param("providerId") Long providerId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
     // ===== MÉTODOS PARA DASHBOARD CLIENTE =====
     
     /**
@@ -313,6 +332,26 @@ Double sumRevenueByProviderId(
            "FUNCTION('MONTH', inv.rentalContract.startDate) " +
            "ORDER BY year ASC, month ASC")
     List<Object[]> findMonthlySpendingByClientContracts(
+            @Param("clientId") Long clientId,
+            @Param("startDate") LocalDateTime startDate
+    );
+
+    /**
+     * Obtiene gastos mensuales BRUTOS de un cliente específico SOLO DE CONTRATOS (para gráfico monthly-spending)
+     * Usa la MISMA lógica que los KPI cards: issueDate y estados PAID + ISSUED
+     */
+    @Query("SELECT FUNCTION('YEAR', inv.issueDate) as year, " +
+           "FUNCTION('MONTH', inv.issueDate) as month, " +
+           "SUM(inv.totalAmount) as spending " +
+           "FROM InvoiceEntity inv " +
+           "WHERE inv.rentalContract.tenant.id = :clientId " +
+           "AND inv.status IN ('PAID', 'ISSUED') " +
+           "AND inv.issueDate >= :startDate " +
+           "AND inv.rentalContract IS NOT NULL " +
+           "GROUP BY FUNCTION('YEAR', inv.issueDate), " +
+           "FUNCTION('MONTH', inv.issueDate) " +
+           "ORDER BY year ASC, month ASC")
+    List<Object[]> findMonthlyGrossSpendingByClientContracts(
             @Param("clientId") Long clientId,
             @Param("startDate") LocalDateTime startDate
     );

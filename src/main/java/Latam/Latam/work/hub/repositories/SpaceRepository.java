@@ -139,17 +139,23 @@ public interface SpaceRepository extends JpaRepository<SpaceEntity, Long> {
 
     /**
      * Obtiene el rendimiento de espacios de un proveedor
+     * CORREGIDO: La tasa de ocupación ahora refleja actividad actual, no porcentaje de éxito
      */
     @Query("SELECT s.name, " +
            "COUNT(DISTINCT b.id) as totalBookings, " +
            "COUNT(DISTINCT rc.id) as totalContracts, " +
            "COALESCE(SUM(CASE WHEN b.status != 'CANCELED' THEN b.totalAmount ELSE 0 END), 0) + " +
            "COALESCE(SUM(CASE WHEN rc.contractStatus = 'ACTIVE' THEN rc.monthlyAmount ELSE 0 END), 0) as totalRevenue, " +
-           "CASE WHEN COUNT(DISTINCT b.id) + COUNT(DISTINCT rc.id) > 0 THEN " +
-           "     (COUNT(DISTINCT CASE WHEN b.status IN ('CONFIRMED', 'ACTIVE', 'COMPLETED') THEN b.id END) + " +
-           "      COUNT(DISTINCT CASE WHEN rc.contractStatus = 'ACTIVE' THEN rc.id END)) * 100.0 / " +
-           "     (COUNT(DISTINCT b.id) + COUNT(DISTINCT rc.id)) " +
-           "ELSE 0 END as occupancyRate " +
+           "CASE " +
+           "  WHEN EXISTS (SELECT 1 FROM RentalContractEntity rc2 WHERE rc2.space = s AND rc2.contractStatus = 'ACTIVE') THEN 100.0 " +
+           "  WHEN EXISTS (SELECT 1 FROM BookingEntity b2 WHERE b2.space = s AND b2.status IN ('CONFIRMED', 'ACTIVE')) THEN " +
+           "       CASE WHEN COUNT(DISTINCT CASE WHEN b.status IN ('CONFIRMED', 'ACTIVE', 'COMPLETED') THEN b.id END) > 0 THEN 75.0 ELSE 50.0 END " +
+           "  WHEN COUNT(DISTINCT b.id) > 0 OR COUNT(DISTINCT rc.id) > 0 THEN " +
+           "       (COUNT(DISTINCT CASE WHEN b.status IN ('CONFIRMED', 'ACTIVE', 'COMPLETED') THEN b.id END) + " +
+           "        COUNT(DISTINCT CASE WHEN rc.contractStatus IN ('ACTIVE', 'CONFIRMED') THEN rc.id END)) * 100.0 / " +
+           "       GREATEST(COUNT(DISTINCT b.id) + COUNT(DISTINCT rc.id), 1) " +
+           "  ELSE 0.0 " +
+           "END as occupancyRate " +
            "FROM SpaceEntity s " +
            "LEFT JOIN s.bookings b " +
            "LEFT JOIN s.rentalContracts rc " +

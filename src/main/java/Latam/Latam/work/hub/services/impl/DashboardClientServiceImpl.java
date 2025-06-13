@@ -195,19 +195,24 @@ public class DashboardClientServiceImpl implements DashboardClientService {
 
         Map<YearMonth, Double> spendingByMonth = new HashMap<>();
         
-        // Gastos en reservas (usando facturas)
-        log.info("--- CONSULTANDO GASTOS DE RESERVAS (FACTURAS) ---");
-        List<Object[]> bookingSpendingFromInvoices = invoiceRepository.findMonthlySpendingByClientBookings(client.getId(), startDateOfRange);
-        log.info("Consulta de facturas de reservas devolvió {} filas", bookingSpendingFromInvoices != null ? bookingSpendingFromInvoices.size() : 0);
+        // === CAMBIO A GASTOS BRUTOS PARA COINCIDIR CON KPI CARDS ===
+        log.info("=== CALCULANDO GASTOS BRUTOS MENSUALES CLIENTE {} ===", client.getId());
+        log.info("Período de consulta: desde {} hasta ahora", startDateOfRange);
+        log.info("*** IMPORTANTE: USANDO MÉTODO BRUTO PARA COINCIDIR CON KPI CARDS ***");
         
-        if (bookingSpendingFromInvoices != null) {
-            for (Object[] row : bookingSpendingFromInvoices) {
+        // Gastos BRUTOS en reservas (mismo método que KPI cards)
+        log.info("--- CONSULTANDO GASTOS BRUTOS DE RESERVAS ---");
+        List<Object[]> bookingGrossSpending = bookingRepository.findMonthlyGrossSpendingByClient(client.getId(), startDateOfRange);
+        log.info("Gastos BRUTOS de reservas: {} registros", bookingGrossSpending != null ? bookingGrossSpending.size() : 0);
+        
+        if (bookingGrossSpending != null) {
+            for (Object[] row : bookingGrossSpending) {
                 if (row != null && row.length == 3 && row[0] instanceof Number && row[1] instanceof Number && row[2] instanceof Number) {
                     int year = ((Number) row[0]).intValue();
                     int month = ((Number) row[1]).intValue();
                     double spending = ((Number) row[2]).doubleValue();
                     
-                    log.info("Factura Reserva: Año {}, Mes {}, Gasto: ${}", year, month, spending);
+                    log.info("Reserva BRUTA: Año {}, Mes {}, Gasto: ${}", year, month, spending);
                     
                     YearMonth yearMonth = YearMonth.of(year, month);
                     spendingByMonth.merge(yearMonth, spending, Double::sum);
@@ -215,85 +220,60 @@ public class DashboardClientServiceImpl implements DashboardClientService {
             }
         }
         
-        // Gastos en reservas (usando entidad BookingEntity directamente como backup)
-        log.info("--- CONSULTANDO GASTOS DE RESERVAS (ENTIDAD DIRECTA) ---");
-        List<Object[]> bookingSpending = bookingRepository.findMonthlySpendingByClient(client.getId(), startDateOfRange);
-        log.info("Consulta de reservas entidad devolvió {} filas", bookingSpending != null ? bookingSpending.size() : 0);
+        // Gastos BRUTOS en contratos (mismo método que KPI cards)
+        log.info("--- CONSULTANDO GASTOS BRUTOS DE CONTRATOS ---");
+        List<Object[]> contractGrossSpending = invoiceRepository.findMonthlyGrossSpendingByClientContracts(client.getId(), startDateOfRange);
+        log.info("Gastos BRUTOS de contratos: {} registros", contractGrossSpending != null ? contractGrossSpending.size() : 0);
         
-        if (bookingSpending != null) {
-            for (Object[] row : bookingSpending) {
+        if (contractGrossSpending != null) {
+            for (Object[] row : contractGrossSpending) {
                 if (row != null && row.length == 3 && row[0] instanceof Number && row[1] instanceof Number && row[2] instanceof Number) {
                     int year = ((Number) row[0]).intValue();
                     int month = ((Number) row[1]).intValue();
                     double spending = ((Number) row[2]).doubleValue();
                     
-                    log.info("Reserva Entidad: Año {}, Mes {}, Gasto: ${}", year, month, spending);
-                    
-                    YearMonth yearMonth = YearMonth.of(year, month);
-                    spendingByMonth.merge(yearMonth, spending, Double::sum);
-                }
-            }
-        }
-        
-        // Gastos en contratos (CORREGIDO: usando fecha de inicio del contrato)
-        log.info("--- CONSULTANDO GASTOS DE CONTRATOS (FECHA INICIO) ---");
-        LocalDate startDateAsLocalDate = startDateOfRange.toLocalDate(); // Convertir a LocalDate
-        List<Object[]> contractSpending = invoiceRepository.findMonthlySpendingByClientContractsWithLocalDate(client.getId(), startDateAsLocalDate);
-        log.info("Consulta de contratos devolvió {} filas", contractSpending != null ? contractSpending.size() : 0);
-        
-        if (contractSpending != null) {
-            for (Object[] row : contractSpending) {
-                if (row != null && row.length == 3 && row[0] instanceof Number && row[1] instanceof Number && row[2] instanceof Number) {
-                    int year = ((Number) row[0]).intValue();
-                    int month = ((Number) row[1]).intValue();
-                    double spending = ((Number) row[2]).doubleValue();
-                    
-                    log.info("Contrato (fecha inicio): Año {}, Mes {}, Gasto: ${}", year, month, spending);
+                    log.info("Contrato BRUTO: Año {}, Mes {}, Gasto: ${}", year, month, spending);
                     
                     YearMonth yearMonth = YearMonth.of(year, month);
                     spendingByMonth.merge(yearMonth, spending, Double::sum);
                 } else {
-                    log.warn("Fila de contrato inválida: {}", Arrays.toString(row));
+                    log.warn("Fila de contrato BRUTO inválida: {}", Arrays.toString(row));
                 }
             }
         } else {
-            log.warn("contractSpending es NULL - No se encontraron datos de contratos");
+            log.warn("contractGrossSpending es NULL - No se encontraron datos de contratos BRUTOS");
         }
 
-        // === DEBUG ADICIONAL DESPUÉS DEL PROCESAMIENTO ===
+        // === VERIFICACIÓN CONTRA KPI CARDS ===
         LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
         LocalDateTime now = LocalDateTime.now();
         
         // Gastos de contratos en período de 30 días (mismo método que KPI cards)
         Double contractGrossSpending30Days = invoiceRepository.sumGrossSpendingFromContractsByClientId(
                 client.getId(), thirtyDaysAgo, now);
-        log.info("COMPARACIÓN - Gastos contratos últimos 30 días (método KPI): ${}", contractGrossSpending30Days);
+        log.info("*** VERIFICACIÓN KPI vs GRÁFICO ***");
+        log.info("KPI Cards - Gastos contratos últimos 30 días: ${}", contractGrossSpending30Days);
         
-        // Gastos de contratos en período mensual
-        Double contractSpendingRange = invoiceRepository.sumGrossSpendingFromContractsByClientId(
-                client.getId(), startDateOfRange, now);
-        log.info("COMPARACIÓN - Gastos contratos desde {} (método gráfico): ${}", startDateOfRange, contractSpendingRange);
+        // Gastos de reservas en período de 30 días (mismo método que KPI cards)
+        Double bookingGrossSpending30Days = bookingRepository.sumGrossSpendingByClientInDateRange(
+                client.getId(), thirtyDaysAgo, now);
+        log.info("KPI Cards - Gastos reservas últimos 30 días: ${}", bookingGrossSpending30Days);
+        
+        Double totalKpiSpending = (contractGrossSpending30Days != null ? contractGrossSpending30Days : 0.0) + 
+                                 (bookingGrossSpending30Days != null ? bookingGrossSpending30Days : 0.0);
+        log.info("KPI Cards - TOTAL gastos últimos 30 días: ${}", totalKpiSpending);
 
-        log.info("--- RESUMEN POR MES DESPUÉS DE PROCESAR ---");
+        // === RESUMEN GRÁFICO POR MES ===
+        log.info("--- RESUMEN GASTOS BRUTOS POR MES ---");
         for (Map.Entry<YearMonth, Double> entry : spendingByMonth.entrySet()) {
-            log.info("Mes {}: Total ${}", entry.getKey().format(YEAR_MONTH_FORMATTER), entry.getValue());
+            log.info("Mes {}: Total BRUTO ${}", entry.getKey().format(YEAR_MONTH_FORMATTER), entry.getValue());
         }
 
-        // DEBUG ADICIONAL: Ver todas las facturas individuales
-        log.info("--- DEBUG: LISTANDO TODAS LAS FACTURAS DE CONTRATOS ---");
-        List<Object[]> allContractInvoices = invoiceRepository.findAllContractInvoicesForDebug(client.getId(), startDateOfRange);
-        log.info("Total facturas de contratos encontradas: {}", allContractInvoices.size());
+        // Sumar todo el período del gráfico para comparar
+        Double totalGraphSpending = spendingByMonth.values().stream().mapToDouble(Double::doubleValue).sum();
+        log.info("GRÁFICO - TOTAL gastos desde {}: ${}", startDateOfRange, totalGraphSpending);
         
-        for (Object[] invoice : allContractInvoices) {
-            log.info("Factura: ID={}, Número={}, Monto=${}, IssueDate={}, Estado={}, FechaInicioContrato={}", 
-                    invoice[0], invoice[1], invoice[2], invoice[3], invoice[4], invoice[5]);
-        }
-        log.info("--- FIN DEBUG FACTURAS INDIVIDUALES ---");
-        
-        // También veamos los gastos usando la fecha de inicio vs issueDate
-        Double contractSpendingByIssueDate = invoiceRepository.sumGrossSpendingFromContractsByClientId(
-                client.getId(), startDateOfRange, now);
-        log.info("COMPARACIÓN - Gastos por issueDate desde {}: ${}", startDateOfRange, contractSpendingByIssueDate);
+        log.info("*** DIFERENCIA ESPERADA: El KPI es últimos 30 días, el gráfico es {} meses ***", validLastNMonths);
 
         List<ClientMonthlySpendingDto> result = new ArrayList<>();
         YearMonth currentMonth = YearMonth.now();

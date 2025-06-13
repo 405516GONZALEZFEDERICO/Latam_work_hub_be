@@ -165,8 +165,13 @@ public class DashboardProviderServiceImpl implements DashboardProviderService {
 
         Map<YearMonth, Double> revenueByMonth = new HashMap<>();
         
-        // Ingresos de reservas
-        List<Object[]> bookingRevenue = bookingRepository.findMonthlyRevenueByProvider(provider.getId(), startDateOfRange);
+        // === CAMBIO A INGRESOS BRUTOS PARA COINCIDIR CON ADMIN ===
+        log.info("Calculando ingresos BRUTOS mensuales para proveedor {} desde {}", provider.getId(), startDateOfRange);
+        
+        // Ingresos BRUTOS de reservas (mismo método que admin)
+        List<Object[]> bookingRevenue = bookingRepository.findMonthlyGrossRevenueByProvider(provider.getId(), startDateOfRange);
+        log.info("Ingresos BRUTOS de reservas por mes: {} registros", bookingRevenue != null ? bookingRevenue.size() : 0);
+        
         if (bookingRevenue != null) {
             for (Object[] row : bookingRevenue) {
                 if (row != null && row.length == 3 && row[0] instanceof Number && row[1] instanceof Number && row[2] instanceof Number) {
@@ -176,12 +181,14 @@ public class DashboardProviderServiceImpl implements DashboardProviderService {
                     
                     YearMonth yearMonth = YearMonth.of(year, month);
                     revenueByMonth.merge(yearMonth, revenue, Double::sum);
+                    log.debug("Reservas BRUTAS - Año {}, Mes {}, Ingreso: ${}", year, month, revenue);
                 }
             }
         }
         
-        // Ingresos de contratos
-        List<Object[]> contractRevenue = invoiceRepository.findMonthlyRevenueByProvider(provider.getId(), startDateOfRange);
+        // Ingresos BRUTOS de contratos (mismo método que admin)
+        List<Object[]> contractRevenue = invoiceRepository.findMonthlyGrossRevenueByProvider(provider.getId(), startDateOfRange);
+        log.info("Ingresos BRUTOS de contratos por mes: {} registros", contractRevenue != null ? contractRevenue.size() : 0);
         if (contractRevenue != null) {
             for (Object[] row : contractRevenue) {
                 if (row != null && row.length == 3 && row[0] instanceof Number && row[1] instanceof Number && row[2] instanceof Number) {
@@ -191,8 +198,15 @@ public class DashboardProviderServiceImpl implements DashboardProviderService {
                     
                     YearMonth yearMonth = YearMonth.of(year, month);
                     revenueByMonth.merge(yearMonth, revenue, Double::sum);
+                    log.debug("Contratos BRUTOS - Año {}, Mes {}, Ingreso: ${}", year, month, revenue);
                 }
             }
+        }
+        
+        // === RESUMEN FINAL ===
+        log.info("=== RESUMEN INGRESOS BRUTOS MENSUALES PROVEEDOR {} ===", provider.getId());
+        for (Map.Entry<YearMonth, Double> entry : revenueByMonth.entrySet()) {
+            log.info("Mes {}: Total BRUTO ${}", entry.getKey().format(YEAR_MONTH_FORMATTER), entry.getValue());
         }
 
         List<ProviderMonthlyRevenueDto> result = new ArrayList<>();
