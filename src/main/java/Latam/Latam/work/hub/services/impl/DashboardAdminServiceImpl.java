@@ -265,9 +265,31 @@ public class DashboardAdminServiceImpl implements DashboardAdminService {
     public List<TopSpacesDto> getTop5Spaces() {
         log.debug("Fetching top 5 spaces by rentals and reservations");
         Pageable pageable = PageRequest.of(0, 5);
-        return spaceRepository.findTop5SpacesByRentalsAndReservations(pageable).stream()
+        List<TopSpacesDto> spaces = spaceRepository.findTop5SpacesByRentalsAndReservations(pageable).stream()
                 .filter(row -> row != null && row.length == 3 && row[0] instanceof String && row[1] instanceof Long && row[2] instanceof Long)
                 .map(row -> new TopSpacesDto((String) row[0], (Long) row[1], (Long) row[2]))
                 .collect(Collectors.toList());
+        
+        // Ordenar con prioridad para espacios que tienen AMBOS (rentals Y reservations)
+        spaces.sort((a, b) -> {
+            boolean hasRentalAndReservationA = a.getRentalCount() > 0 && a.getReservationCount() > 0;
+            boolean hasRentalAndReservationB = b.getRentalCount() > 0 && b.getReservationCount() > 0;
+            
+            // Si uno tiene ambos y el otro no, el que tiene ambos va primero
+            if (hasRentalAndReservationA && !hasRentalAndReservationB) {
+                return -1; // A va antes que B
+            }
+            if (!hasRentalAndReservationA && hasRentalAndReservationB) {
+                return 1; // B va antes que A
+            }
+            
+            // Si ambos tienen diversidad o ambos no la tienen, ordenar por suma total
+            long totalA = a.getRentalCount() + a.getReservationCount();
+            long totalB = b.getRentalCount() + b.getReservationCount();
+            return Long.compare(totalB, totalA);
+        });
+        
+        log.debug("Top 5 spaces ordered by total activity: {}", spaces);
+        return spaces;
     }
 }
