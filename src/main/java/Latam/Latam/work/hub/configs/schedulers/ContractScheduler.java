@@ -125,7 +125,7 @@ public class ContractScheduler {
      * Consolidada toda la lógica de actualización en un solo método
      * Se ejecuta cada 5 minutos para mantener la consistencia sin sobrecargar el sistema
      */
-    @Scheduled(fixedRate = 300000) // 5 minutos
+    @Scheduled(fixedRate = 5000) // 5 minutos
     @Transactional
     public void updateContractsAndSpacesStatus() {
         try {
